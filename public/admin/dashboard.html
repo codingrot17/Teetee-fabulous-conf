@@ -226,6 +226,29 @@
             padding: 24px;
         }
         
+        /* Loading State */
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 20px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #8B4A87;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Stats Grid - Only for main dashboard */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -503,7 +526,7 @@
     <!-- Sidebar -->
     <nav class="sidebar" :class="{ 'collapsed': !sidebarOpen, 'mobile-open': sidebarOpen }">
         <div class="sidebar-header">
-            <a href="dashboard.html" class="sidebar-logo">
+            <a href="#" class="sidebar-logo" @click="setActiveSection('dashboard')">
                 <div class="sidebar-logo-icon">🧁</div>
                 <div class="sidebar-logo-text">TEETEE FABULOUS</div>
             </a>
@@ -512,19 +535,19 @@
         <div class="sidebar-nav">
             <div class="nav-section">
                 <div class="nav-section-title">Main</div>
-                <a href="#" class="nav-item active" @click="setActiveSection('dashboard')">
+                <a href="#dashboard" class="nav-item" :class="{ 'active': activeSection === 'dashboard' }" @click="setActiveSection('dashboard')">
                     <i class="fas fa-tachometer-alt"></i>
                     Dashboard
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('products')">
+                <a href="#products" class="nav-item" :class="{ 'active': activeSection === 'products' }" @click="setActiveSection('products')">
                     <i class="fas fa-birthday-cake"></i>
                     Products
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('orders')">
+                <a href="#orders" class="nav-item" :class="{ 'active': activeSection === 'orders' }" @click="setActiveSection('orders')">
                     <i class="fas fa-shopping-cart"></i>
                     Orders
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('customers')">
+                <a href="#customers" class="nav-item" :class="{ 'active': activeSection === 'customers' }" @click="setActiveSection('customers')">
                     <i class="fas fa-users"></i>
                     Customers
                 </a>
@@ -532,15 +555,15 @@
             
             <div class="nav-section">
                 <div class="nav-section-title">Content</div>
-                <a href="#" class="nav-item" @click="setActiveSection('content')">
+                <a href="#content" class="nav-item" :class="{ 'active': activeSection === 'content' }" @click="setActiveSection('content')">
                     <i class="fas fa-edit"></i>
                     Site Content
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('media')">
+                <a href="#media" class="nav-item" :class="{ 'active': activeSection === 'media' }" @click="setActiveSection('media')">
                     <i class="fas fa-images"></i>
                     Media Library
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('categories')">
+                <a href="#categories" class="nav-item" :class="{ 'active': activeSection === 'categories' }" @click="setActiveSection('categories')">
                     <i class="fas fa-tags"></i>
                     Categories
                 </a>
@@ -548,11 +571,11 @@
             
             <div class="nav-section">
                 <div class="nav-section-title">Settings</div>
-                <a href="#" class="nav-item" @click="setActiveSection('settings')">
+                <a href="#settings" class="nav-item" :class="{ 'active': activeSection === 'settings' }" @click="setActiveSection('settings')">
                     <i class="fas fa-cog"></i>
                     Settings
                 </a>
-                <a href="#" class="nav-item" @click="setActiveSection('analytics')">
+                <a href="#analytics" class="nav-item" :class="{ 'active': activeSection === 'analytics' }" @click="setActiveSection('analytics')">
                     <i class="fas fa-chart-bar"></i>
                     Analytics
                 </a>
@@ -597,10 +620,15 @@
             </div>
         </header>
         
-        <!-- Dashboard Content -->
+        <!-- Dashboard Content Container -->
         <div class="dashboard-content">
-            <!-- Dashboard Overview -->
-            <div x-show="activeSection === 'dashboard'">
+            <!-- Loading State -->
+            <div x-show="loading" class="loading-container">
+                <div class="loading-spinner"></div>
+            </div>
+            
+            <!-- Main Dashboard -->
+            <div x-show="activeSection === 'dashboard' && !loading">
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -725,24 +753,19 @@
                 </div>
             </div>
             
-            <!-- Other Sections Placeholder -->
-            <div x-show="activeSection !== 'dashboard'">
-                <div style="text-align: center; padding: 60px 20px;">
-                    <div style="font-size: 48px; margin-bottom: 20px;">🚧</div>
-                    <h2 style="font-size: 24px; margin-bottom: 12px; color: #374151;" x-text="getPageTitle()"></h2>
-                    <p style="color: #6b7280;">This section is under development. Coming soon!</p>
-                </div>
-            </div>
+            <!-- Dynamic Content Container -->
+            <div x-show="activeSection !== 'dashboard' && !loading" x-html="dynamicContent"></div>
         </div>
     </main>
 
     <script>
-        // Initialize Alpine.js data without module imports for now
         function adminDashboard() {
             return {
-                user: { name: 'Admin User' }, // Mock user for now
+                user: { name: 'Admin User' },
                 sidebarOpen: window.innerWidth > 768,
                 activeSection: 'dashboard',
+                loading: false,
+                dynamicContent: '',
                 stats: {
                     products: 12,
                     ordersToday: 5,
@@ -773,9 +796,28 @@
                     }
                 ],
                 
+                // File mappings for different sections
+                sectionFiles: {
+                    'products': 'components/products.html',
+                    'orders': 'components/orders.html',
+                    'customers': 'components/customers.html',
+                    'content': 'components/content.html',
+                    'media': 'components/media.html',
+                    'categories': 'components/categories.html',
+                    'settings': 'components/settings.html',
+                    'analytics': 'components/analytics.html'
+                },
+                
                 async init() {
-                    // For now, skip authentication check
                     console.log('Dashboard initialized');
+                    
+                    // Initialize from URL hash or localStorage
+                    this.initializeFromState();
+                    
+                    // Listen for browser back/forward buttons
+                    window.addEventListener('hashchange', () => {
+                        this.handleHashChange();
+                    });
                     
                     // Setup responsive sidebar
                     window.addEventListener('resize', () => {
@@ -787,33 +829,108 @@
                     });
                 },
                 
+                // Initialize active section from URL hash or localStorage
+                initializeFromState() {
+                    // First check URL hash
+                    let initialSection = window.location.hash.substring(1);
+                    
+                    // If no hash, check localStorage
+                    if (!initialSection) {
+                        initialSection = localStorage.getItem('dashboardActiveSection') || 'dashboard';
+                    }
+                    
+                    // Validate section exists
+                    const validSections = ['dashboard', 'products', 'orders', 'customers', 'content', 'media', 'categories', 'settings', 'analytics'];
+                    if (validSections.includes(initialSection)) {
+                        this.setActiveSection(initialSection, false); // Don't update URL on init
+                    }
+                },
+                
+                // Handle browser hash changes
+                handleHashChange() {
+                    const section = window.location.hash.substring(1);
+                    if (section && section !== this.activeSection) {
+                        this.setActiveSection(section, false);
+                    }
+                },
+                
                 toggleSidebar() {
                     this.sidebarOpen = !this.sidebarOpen;
                 },
                 
-                setActiveSection(section) {
+                async setActiveSection(section, updateUrl = true) {
+                    // Update active section
                     this.activeSection = section;
+                    
+                    // Update URL hash if requested
+                    if (updateUrl) {
+                        window.location.hash = section === 'dashboard' ? '' : section;
+                    }
+                    
+                    // Save to localStorage for persistence
+                    localStorage.setItem('dashboardActiveSection', section);
                     
                     // Close mobile sidebar
                     if (window.innerWidth <= 768) {
                         this.sidebarOpen = false;
                     }
                     
-                    // Update active nav item
-                    document.querySelectorAll('.nav-item').forEach(item => {
-                        item.classList.remove('active');
-                    });
-                    
-                    // Find and activate the correct nav item
-                    const navItems = document.querySelectorAll('.nav-item');
-                    navItems.forEach(item => {
-                        if (item.textContent.trim().toLowerCase().includes(section.toLowerCase())) {
-                            item.classList.add('active');
-                        }
-                    });
+                    // Load dynamic content if not dashboard
+                    if (section !== 'dashboard') {
+                        await this.loadSectionContent(section);
+                    }
                 },
                 
-                getPageTitle() {
+                async loadSectionContent(section) {
+                    // Show loading state
+                    this.loading = true;
+                    this.dynamicContent = '';
+                    
+                    try {
+                        // Check if we have a file mapping for this section
+                        const filePath = this.sectionFiles[section];
+                        
+                        if (filePath) {
+                            // Try to fetch the component file
+                            const response = await fetch(filePath);
+                            
+                            if (response.ok) {
+                                const content = await response.text();
+                                this.dynamicContent = content;
+                                
+                                // Initialize any Alpine components in the loaded content
+                                this.$nextTick(() => {
+                                    // Re-initialize Alpine for new content
+                                    Alpine.initTree(document.querySelector('[x-html="dynamicContent"]'));
+                                });
+                            } else {
+                                // Fallback to placeholder
+                                this.dynamicContent = this.getPlaceholderContent(section);
+                            }
+                        } else {
+                            // No file mapping, show placeholder
+                            this.dynamicContent = this.getPlaceholderContent(section);
+                        }
+                    } catch (error) {
+                        console.error('Error loading content:', error);
+                        this.dynamicContent = this.getPlaceholderContent(section);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                getPlaceholderContent(section) {
+                    return `
+                        <div style="text-align: center; padding: 60px 20px;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">🚧</div>
+                            <h2 style="font-size: 24px; margin-bottom: 12px; color: #374151;">${this.getPageTitle(section)}</h2>
+                            <p style="color: #6b7280;">This section is under development. Coming soon!</p>
+                        </div>
+                    `;
+                },
+                
+                getPageTitle(section = null) {
+                    const currentSection = section || this.activeSection;
                     const titles = {
                         dashboard: 'Dashboard',
                         products: 'Products Management',
@@ -826,17 +943,18 @@
                         analytics: 'Analytics'
                     };
                     
-                    return titles[this.activeSection] || 'Dashboard';
+                    return titles[currentSection] || 'Dashboard';
                 },
                 
                 async handleLogout() {
-                    // For now, just redirect
+                    // Clear saved state
+                    localStorage.removeItem('dashboardActiveSection');
                     window.location.href = 'index.html';
                 }
             }
         }
         
-        // Make adminDashboard available globally before Alpine loads
+        // Make function globally available
         window.adminDashboard = adminDashboard;
     </script>
 </body>
