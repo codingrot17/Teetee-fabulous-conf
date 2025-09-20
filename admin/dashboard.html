@@ -7,7 +7,8 @@
     <link rel="icon" href="../asset/images/brand.png" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <style>
+   
+<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
         
         * {
@@ -520,11 +521,17 @@
         .sidebar-overlay.show {
             display: block;
         }
+        
+        @media (max-width: 576px) {
+          .page-title{
+            font-size: 18px;
+          }
+        }
     </style>
 </head>
 <body x-data="adminDashboard()">
     <!-- Sidebar -->
-    <nav class="sidebar" :class="{ 'collapsed': !sidebarOpen, 'mobile-open': sidebarOpen }">
+     <nav class="sidebar" :class="{ 'collapsed': !sidebarOpen, 'mobile-open': sidebarOpen }">
         <div class="sidebar-header">
             <a href="#" class="sidebar-logo" @click="setActiveSection('dashboard')">
                 <div class="sidebar-logo-icon">🧁</div>
@@ -582,7 +589,8 @@
             </div>
         </div>
     </nav>
-    
+   
+
     <!-- Sidebar Overlay for mobile -->
     <div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
     
@@ -628,7 +636,7 @@
             </div>
             
             <!-- Main Dashboard -->
-            <div x-show="activeSection === 'dashboard' && !loading">
+             <div x-show="activeSection === 'dashboard' && !loading">
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -752,7 +760,7 @@
                     </div>
                 </div>
             </div>
-            
+                       
             <!-- Dynamic Content Container -->
             <div x-show="activeSection !== 'dashboard' && !loading" x-html="dynamicContent"></div>
         </div>
@@ -773,30 +781,11 @@
                     customers: 89
                 },
                 recentActivity: [
-                    {
-                        id: 1,
-                        type: 'order',
-                        icon: 'fas fa-shopping-cart',
-                        text: 'New order from Sarah Johnson',
-                        time: '2 minutes ago'
-                    },
-                    {
-                        id: 2,
-                        type: 'product',
-                        icon: 'fas fa-birthday-cake',
-                        text: 'Added new chocolate cake to inventory',
-                        time: '1 hour ago'
-                    },
-                    {
-                        id: 3,
-                        type: 'content',
-                        icon: 'fas fa-edit',
-                        text: 'Updated about section content',
-                        time: '3 hours ago'
-                    }
+                    { id: 1, type: 'order', icon: 'fas fa-shopping-cart', text: 'New order from Sarah Johnson', time: '2 minutes ago' },
+                    { id: 2, type: 'product', icon: 'fas fa-birthday-cake', text: 'Added new chocolate cake to inventory', time: '1 hour ago' },
+                    { id: 3, type: 'content', icon: 'fas fa-edit', text: 'Updated about section content', time: '3 hours ago' }
                 ],
                 
-                // File mappings for different sections
                 sectionFiles: {
                     'products': 'components/products.html',
                     'orders': 'components/orders.html',
@@ -810,43 +799,24 @@
                 
                 async init() {
                     console.log('Dashboard initialized');
-                    
-                    // Initialize from URL hash or localStorage
                     this.initializeFromState();
-                    
-                    // Listen for browser back/forward buttons
-                    window.addEventListener('hashchange', () => {
-                        this.handleHashChange();
-                    });
-                    
-                    // Setup responsive sidebar
+                    window.addEventListener('hashchange', () => this.handleHashChange());
                     window.addEventListener('resize', () => {
-                        if (window.innerWidth > 768) {
-                            this.sidebarOpen = true;
-                        } else {
-                            this.sidebarOpen = false;
-                        }
+                        this.sidebarOpen = window.innerWidth > 768;
                     });
                 },
                 
-                // Initialize active section from URL hash or localStorage
                 initializeFromState() {
-                    // First check URL hash
                     let initialSection = window.location.hash.substring(1);
-                    
-                    // If no hash, check localStorage
                     if (!initialSection) {
                         initialSection = localStorage.getItem('dashboardActiveSection') || 'dashboard';
                     }
-                    
-                    // Validate section exists
-                    const validSections = ['dashboard', 'products', 'orders', 'customers', 'content', 'media', 'categories', 'settings', 'analytics'];
+                    const validSections = ['dashboard','products','orders','customers','content','media','categories','settings','analytics'];
                     if (validSections.includes(initialSection)) {
-                        this.setActiveSection(initialSection, false); // Don't update URL on init
+                        this.setActiveSection(initialSection, false);
                     }
                 },
                 
-                // Handle browser hash changes
                 handleHashChange() {
                     const section = window.location.hash.substring(1);
                     if (section && section !== this.activeSection) {
@@ -859,56 +829,39 @@
                 },
                 
                 async setActiveSection(section, updateUrl = true) {
-                    // Update active section
                     this.activeSection = section;
-                    
-                    // Update URL hash if requested
                     if (updateUrl) {
                         window.location.hash = section === 'dashboard' ? '' : section;
                     }
-                    
-                    // Save to localStorage for persistence
                     localStorage.setItem('dashboardActiveSection', section);
-                    
-                    // Close mobile sidebar
                     if (window.innerWidth <= 768) {
                         this.sidebarOpen = false;
                     }
-                    
-                    // Load dynamic content if not dashboard
                     if (section !== 'dashboard') {
                         await this.loadSectionContent(section);
                     }
                 },
                 
                 async loadSectionContent(section) {
-                    // Show loading state
                     this.loading = true;
                     this.dynamicContent = '';
-                    
                     try {
-                        // Check if we have a file mapping for this section
                         const filePath = this.sectionFiles[section];
-                        
                         if (filePath) {
-                            // Try to fetch the component file
                             const response = await fetch(filePath);
-                            
                             if (response.ok) {
                                 const content = await response.text();
                                 this.dynamicContent = content;
-                                
-                                // Initialize any Alpine components in the loaded content
                                 this.$nextTick(() => {
-                                    // Re-initialize Alpine for new content
-                                    Alpine.initTree(document.querySelector('[x-html="dynamicContent"]'));
+                                    const container = document.querySelector('[x-html="dynamicContent"]');
+                                    if (container && container.firstElementChild) {
+                                        Alpine.initTree(container.firstElementChild);
+                                    }
                                 });
                             } else {
-                                // Fallback to placeholder
                                 this.dynamicContent = this.getPlaceholderContent(section);
                             }
                         } else {
-                            // No file mapping, show placeholder
                             this.dynamicContent = this.getPlaceholderContent(section);
                         }
                     } catch (error) {
@@ -942,19 +895,15 @@
                         settings: 'Settings',
                         analytics: 'Analytics'
                     };
-                    
                     return titles[currentSection] || 'Dashboard';
                 },
                 
                 async handleLogout() {
-                    // Clear saved state
                     localStorage.removeItem('dashboardActiveSection');
                     window.location.href = 'index.html';
                 }
             }
         }
-        
-        // Make function globally available
         window.adminDashboard = adminDashboard;
     </script>
 </body>

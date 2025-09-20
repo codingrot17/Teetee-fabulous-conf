@@ -1,0 +1,736 @@
+<!-- Updated Site Content Editor Component - Save as components/content.html -->
+<div x-data="{
+    loading: true,
+    saving: false,
+    activeTab: 'hero',
+    toast: { show: false, message: '', type: '' },
+
+    content: {
+        hero: {
+            text1: 'Your Dream Cake Unfolds Before Your Eyes',
+            text2: 'Order Amazing Cakes From The Best Price',
+            text3: 'Enjoy Fast Free Delivery',
+            text3_highlight: 'And Great Discounts!',
+            cta_button: 'Book Now!',
+            background_image: '../asset/images/hero2banner.png'
+        },
+        about: {
+            title: 'About Us',
+            subtitle: 'Who We Are',
+            main_text: 'We are TEETEE FABULOUS',
+            typing_text: 'CONFECTIONARY, CATERING, EVENT PLANNING...',
+            mission_title: 'Our Mission',
+            mission_text: 'TEETEE FABULOUS inspires and innovates...',
+            vision_title: 'Our Vision',
+            vision_text: 'To build a leading international company...',
+            values_title: 'Our Values',
+            values: [
+                'Entrepreneurship – We are proactive and seek opportunities',
+                'Respect – We respect one another and the planet',
+                'Passion – We are enthusiastic and strive for quality'
+            ],
+            cta_button: 'Contact Us'
+        },
+        skills: {
+            title: 'Our Expertise',
+            subtitle: 'What We Excel At',
+            main_text: 'Our creative skills & experiences.',
+            description: 'We combine traditional baking with innovation.',
+            highlights: [
+                { icon: 'fas fa-award', text: '5+ Years Experience' },
+                { icon: 'fas fa-users', text: '500+ Happy Customers' }
+            ],
+            skills: [
+                { name: 'Creativity with Flavor', percentage: 95 },
+                { name: 'Advanced Baking Skills', percentage: 90 }
+            ],
+            cta_button: 'Get Custom Quote'
+        },
+        contact: {
+            title: 'Contact Us',
+            subtitle: 'Get in Touch',
+            main_text: 'Ready to order your dream cake?',
+            description: 'Have questions? We\\'d love to hear from you!',
+            contact_person: 'Adeniran Titilope Comfort',
+            address: '68, Ebute Kekere Street, Off Afolabi Bus-Stop',
+            email: 'adenirantitilope09@gmail.com',
+            whatsapp: '+234 XXX XXX XXXX',
+            business_hours: 'Mon-Sat: 8AM-8PM | Sun: 10AM-6PM',
+            form_title: 'Send us a Message',
+            services: ['Cake Order', 'Custom Design', 'Bulk Order']
+        },
+        footer: {
+            company_name: 'TEETEE FABULOUS',
+            tagline: 'Creating memorable moments with cakes.',
+            quick_links: [
+                { name: 'Home', url: '#home' },
+                { name: 'About', url: '#about' }
+            ],
+            services_links: [
+                { name: 'Wedding Cakes', url: '#products' },
+                { name: 'Birthday Cakes', url: '#products' }
+            ],
+            social_links: [
+                { name: 'Facebook', icon: 'fab fa-facebook-f', url: '#' },
+                { name: 'Instagram', icon: 'fab fa-instagram', url: '#' }
+            ],
+            copyright: '© 2025 TEETEE FABULOUS'
+        },
+        navigation: {
+            logo_text: 'TEETEE FABULOUS',
+            menu_items: [
+                { name: 'Home', url: '#home' },
+                { name: 'About', url: '#about' },
+                { name: 'Contact', url: '#contact' }
+            ]
+        }
+    },
+
+    async init() {
+        await this.loadContent();
+    },
+
+    async loadContent() {
+        this.loading = true;
+        try {
+            if (!window.dbService) {
+                console.warn('Database service not available, using default content');
+                this.loading = false;
+                return;
+            }
+            
+            // Load all content sections
+            const sections = ['hero', 'about', 'skills', 'contact', 'footer', 'navigation'];
+            
+            for (const section of sections) {
+                try {
+                    const sectionContent = await window.dbService.getSiteContent(section);
+                    if (sectionContent) {
+                        this.content[section] = { ...this.content[section], ...sectionContent };
+                    }
+                } catch (error) {
+                    console.warn(`Failed to load ${section} content:`, error);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.showNotification('Failed to load content', 'error');
+        } finally {
+            this.loading = false;
+        }
+    },
+
+    setActiveTab(tab) { 
+        this.activeTab = tab;
+    },
+
+    async saveContent() {
+        this.saving = true;
+        try {
+            if (!window.dbService) {
+                throw new Error('Database service not available');
+            }
+            
+            // Save current active tab content
+            await window.dbService.updateSiteContent(this.activeTab, this.content[this.activeTab]);
+            
+            this.showNotification('Content saved successfully!', 'success');
+        } catch (error) {
+            console.error('Save error:', error);
+            this.showNotification('Failed to save content.', 'error');
+        } finally {
+            this.saving = false;
+        }
+    },
+
+    async saveAllContent() {
+        this.saving = true;
+        try {
+            if (!window.dbService) {
+                throw new Error('Database service not available');
+            }
+            
+            // Save all content sections
+            const sections = ['hero', 'about', 'skills', 'contact', 'footer', 'navigation'];
+            
+            for (const section of sections) {
+                await window.dbService.updateSiteContent(section, this.content[section]);
+            }
+            
+            this.showNotification('All content saved successfully!', 'success');
+        } catch (error) {
+            console.error('Save all error:', error);
+            this.showNotification('Failed to save content.', 'error');
+        } finally {
+            this.saving = false;
+        }
+    },
+
+    // Hero image upload
+    async handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            try {
+                if (!window.dbService) {
+                    throw new Error('Database service not available');
+                }
+                
+                this.showNotification('Uploading image...', 'info');
+                
+                const uploadResult = await window.dbService.uploadImage(file);
+                
+                this.content.hero.background_image = uploadResult.id;
+                this.content.hero.imagePreview = uploadResult.url;
+                
+                this.showNotification('Image uploaded successfully!', 'success');
+            } catch (error) {
+                console.error('Image upload error:', error);
+                this.showNotification('Failed to upload image', 'error');
+            }
+        }
+    },
+                
+                this.content.hero.background_image = uploadResult.id;
+                this.content.hero.imagePreview = uploadResult.url;
+                
+                this.showNotification('Image uploaded successfully!', 'success');
+            } catch (error) {
+                console.error('Image upload error:', error);
+                this.showNotification('Failed to upload image', 'error');
+            }
+        }
+    },
+
+    removeImage() {
+        this.content.hero.background_image = '';
+        this.content.hero.imagePreview = '';
+    },
+
+    // Dynamic list helpers
+    addHighlight() { 
+        this.content.skills.highlights.push({ icon: 'fas fa-star', text: '' });
+    },
+    removeHighlight(i) { 
+        this.content.skills.highlights.splice(i, 1);
+    },
+    addSkill() { 
+        this.content.skills.skills.push({ name: '', percentage: 50 });
+    },
+    removeSkill(i) { 
+        this.content.skills.skills.splice(i, 1);
+    },
+    addMenuItem() { 
+        this.content.navigation.menu_items.push({ name: '', url: '' });
+    },
+    removeMenuItem(i) { 
+        this.content.navigation.menu_items.splice(i, 1);
+    },
+    addQuickLink() { 
+        this.content.footer.quick_links.push({ name: '', url: '' });
+    },
+    removeQuickLink(i) { 
+        this.content.footer.quick_links.splice(i, 1);
+    },
+    addServiceLink() { 
+        this.content.footer.services_links.push({ name: '', url: '' });
+    },
+    removeServiceLink(i) { 
+        this.content.footer.services_links.splice(i, 1);
+    },
+    addSocialLink() { 
+        this.content.footer.social_links.push({ name: '', icon: '', url: '' });
+    },
+    removeSocialLink(i) { 
+        this.content.footer.social_links.splice(i, 1);
+    },
+
+    // Toast notification
+    showNotification(message, type) {
+        this.toast.message = message;
+        this.toast.type = type;
+        this.toast.show = true;
+        setTimeout(() => { this.toast.show = false }, 3000);
+    }
+}">
+    <!-- Loading State -->
+    <div x-show="loading" style="display: flex; justify-content: center; align-items: center; padding: 60px;">
+        <div style="width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #8B4A87; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div x-show="!loading">
+        <!-- Header -->
+        <div class="header">
+            <div>
+                <h2>Site Content Editor</h2>
+                <p style="color: #64748b; font-size: 14px; margin: 4px 0 0 0;">Manage all your website content from one place</p>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button @click="saveContent" :disabled="saving" class="btn-secondary">
+                    <span x-text="saving ? 'Saving...' : 'Save Current Tab'"></span>
+                </button>
+                <button @click="saveAllContent" :disabled="saving" class="btn-primary">
+                    <i x-show="!saving" class="fas fa-save"></i>
+                    <span x-text="saving ? 'Saving All...' : 'Save All Content'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <template
+                x-for="tab in ['hero','about','skills','contact','navigation','footer']"
+                :key="tab"
+            >
+                <button
+                    @click="setActiveTab(tab)"
+                    :class="activeTab === tab ? 'tab active' : 'tab'"
+                >
+                    <span class="capitalize" x-text="tab.replace('_', ' ')"></span>
+                </button>
+            </template>
+        </div>
+
+        <!-- Hero Tab -->
+        <div x-show="activeTab === 'hero'" class="card">
+            <h3>Hero Section</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text1"
+                placeholder="Main Headline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text2"
+                placeholder="Sub Headline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text3"
+                placeholder="Tagline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text3_highlight"
+                placeholder="Highlighted Text"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.cta_button"
+                placeholder="CTA Button"
+            />
+
+            <!-- Background Image Upload -->
+            <div style="margin-top: 16px">
+                <label class="label">Background Image</label>
+                <div class="upload-box">
+                    <template x-if="!content.hero.imagePreview">
+                        <div>
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <p class="upload-text">Click to upload background image</p>
+                            <input
+                                type="file"
+                                @change="handleImageUpload($event)"
+                                accept="image/*"
+                                style="display: none"
+                                id="heroImageUpload"
+                            />
+                            <label for="heroImageUpload" class="btn-primary">Choose File</label>
+                        </div>
+                    </template>
+
+                    <template x-if="content.hero.imagePreview">
+                        <div>
+                            <img :src="content.hero.imagePreview" class="upload-preview" />
+                            <div>
+                                <button
+                                    type="button"
+                                    @click="removeImage()"
+                                    class="btn-danger small"
+                                >
+                                    Remove Image
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Tab -->
+        <div x-show="activeTab === 'about'" class="card">
+            <h3>About Section</h3>
+            <input class="input" type="text" x-model="content.about.title" placeholder="Title" />
+            <input class="input" type="text" x-model="content.about.subtitle" placeholder="Subtitle" />
+            <textarea class="input" x-model="content.about.main_text" rows="2" placeholder="Main Text"></textarea>
+            <input class="input" type="text" x-model="content.about.typing_text" placeholder="Typing Animation Text" />
+            
+            <h4>Mission</h4>
+            <input class="input" type="text" x-model="content.about.mission_title" placeholder="Mission Title" />
+            <textarea class="input" x-model="content.about.mission_text" rows="3" placeholder="Mission Text"></textarea>
+            
+            <h4>Vision</h4>
+            <input class="input" type="text" x-model="content.about.vision_title" placeholder="Vision Title" />
+            <textarea class="input" x-model="content.about.vision_text" rows="3" placeholder="Vision Text"></textarea>
+            
+            <h4>Values</h4>
+            <input class="input" type="text" x-model="content.about.values_title" placeholder="Values Title" />
+            <template x-for="(val,i) in content.about.values" :key="i">
+                <div class="inline-inputs">
+                    <textarea class="input" x-model="content.about.values[i]" rows="2" placeholder="Value description"></textarea>
+                    <button @click="content.about.values.splice(i, 1)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="content.about.values.push('')" class="btn-secondary">Add Value</button>
+            
+            <input class="input" type="text" x-model="content.about.cta_button" placeholder="CTA Button Text" />
+        </div>
+
+        <!-- Skills Tab -->
+        <div x-show="activeTab === 'skills'" class="card">
+            <h3>Skills Section</h3>
+            <input class="input" type="text" x-model="content.skills.title" placeholder="Title" />
+            <input class="input" type="text" x-model="content.skills.subtitle" placeholder="Subtitle" />
+            <textarea class="input" x-model="content.skills.main_text" rows="2" placeholder="Main Text"></textarea>
+            <textarea class="input" x-model="content.skills.description" rows="3" placeholder="Description"></textarea>
+
+            <h4>Highlights</h4>
+            <template x-for="(hl,i) in content.skills.highlights" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="hl.icon" placeholder="Icon (fas fa-award)" />
+                    <input class="input" type="text" x-model="hl.text" placeholder="Highlight Text" />
+                    <button @click="removeHighlight(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addHighlight" class="btn-secondary">Add Highlight</button>
+
+            <h4>Skills Progress Bars</h4>
+            <template x-for="(s,i) in content.skills.skills" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="s.name" placeholder="Skill Name" />
+                    <input class="input small" type="number" x-model="s.percentage" min="0" max="100" placeholder="%" />
+                    <button @click="removeSkill(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addSkill" class="btn-secondary">Add Skill</button>
+            
+            <input class="input" type="text" x-model="content.skills.cta_button" placeholder="CTA Button Text" />
+        </div>
+
+        <!-- Contact Tab -->
+        <div x-show="activeTab === 'contact'" class="card">
+            <h3>Contact Section</h3>
+            <input class="input" type="text" x-model="content.contact.title" placeholder="Title" />
+            <input class="input" type="text" x-model="content.contact.subtitle" placeholder="Subtitle" />
+            <textarea class="input" x-model="content.contact.main_text" rows="2" placeholder="Main Text"></textarea>
+            <textarea class="input" x-model="content.contact.description" rows="2" placeholder="Description"></textarea>
+            
+            <h4>Contact Information</h4>
+            <input class="input" type="text" x-model="content.contact.contact_person" placeholder="Contact Person" />
+            <input class="input" type="text" x-model="content.contact.address" placeholder="Address" />
+            <input class="input" type="email" x-model="content.contact.email" placeholder="Email" />
+            <input class="input" type="text" x-model="content.contact.whatsapp" placeholder="WhatsApp Number" />
+            <input class="input" type="text" x-model="content.contact.business_hours" placeholder="Business Hours" />
+            <input class="input" type="text" x-model="content.contact.form_title" placeholder="Contact Form Title" />
+            
+            <h4>Service Options</h4>
+            <template x-for="(srv,i) in content.contact.services" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="content.contact.services[i]" placeholder="Service Name" />
+                    <button @click="content.contact.services.splice(i, 1)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="content.contact.services.push('')" class="btn-secondary">Add Service</button>
+        </div>
+
+        <!-- Navigation Tab -->
+        <div x-show="activeTab === 'navigation'" class="card">
+            <h3>Navigation Section</h3>
+            <input class="input" type="text" x-model="content.navigation.logo_text" placeholder="Logo Text" />
+            
+            <h4>Menu Items</h4>
+            <template x-for="(item,i) in content.navigation.menu_items" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="item.name" placeholder="Menu Name" />
+                    <input class="input" type="text" x-model="item.url" placeholder="URL" />
+                    <button @click="removeMenuItem(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addMenuItem" class="btn-secondary">Add Menu Item</button>
+        </div>
+
+        <!-- Footer Tab -->
+        <div x-show="activeTab === 'footer'" class="card">
+            <h3>Footer Section</h3>
+            <input class="input" type="text" x-model="content.footer.company_name" placeholder="Company Name" />
+            <textarea class="input" x-model="content.footer.tagline" rows="2" placeholder="Company Tagline"></textarea>
+
+            <h4>Quick Links</h4>
+            <template x-for="(q,i) in content.footer.quick_links" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="q.name" placeholder="Link Name" />
+                    <input class="input" type="text" x-model="q.url" placeholder="URL" />
+                    <button @click="removeQuickLink(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addQuickLink" class="btn-secondary">Add Quick Link</button>
+
+            <h4>Services Links</h4>
+            <template x-for="(sl,i) in content.footer.services_links" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="sl.name" placeholder="Service Name" />
+                    <input class="input" type="text" x-model="sl.url" placeholder="URL" />
+                    <button @click="removeServiceLink(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addServiceLink" class="btn-secondary">Add Service Link</button>
+
+            <h4>Social Media Links</h4>
+            <template x-for="(soc,i) in content.footer.social_links" :key="i">
+                <div class="inline-inputs">
+                    <input class="input" type="text" x-model="soc.name" placeholder="Platform Name" />
+                    <input class="input" type="text" x-model="soc.icon" placeholder="Icon Class (fab fa-facebook-f)" />
+                    <input class="input" type="text" x-model="soc.url" placeholder="Social Media URL" />
+                    <button @click="removeSocialLink(i)" class="btn-danger">Remove</button>
+                </div>
+            </template>
+            <button @click="addSocialLink" class="btn-secondary">Add Social Link</button>
+
+            <input class="input" type="text" x-model="content.footer.copyright" placeholder="Copyright Text" />
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div
+        x-show="toast.show"
+        x-transition
+        class="toast"
+        :class="toast.type === 'success' ? 'toast-success' : toast.type === 'error' ? 'toast-error' : 'toast-info'"
+    >
+        <span x-text="toast.message"></span>
+        <button @click="toast.show = false" style="margin-left: 12px; background: none; border: none; color: white; cursor: pointer;">×</button>
+    </div>
+</div>
+
+<!-- Enhanced Styles -->
+<style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .header h2 {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+    }
+    .tabs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+        background: white;
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .tab {
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        text-transform: capitalize;
+    }
+    .tab:hover {
+        background: #f1f5f9;
+        border-color: #8B4A87;
+    }
+    .tab.active {
+        background: linear-gradient(135deg, #8B4A87, #D4A574);
+        color: white;
+        border-color: transparent;
+    }
+    .card {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+    }
+    .card h3 {
+        font-size: 20px;
+        margin-bottom: 20px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .card h4 {
+        font-size: 16px;
+        margin: 20px 0 12px 0;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 8px;
+    }
+    .input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    .input:focus {
+        outline: none;
+        border-color: #8B4A87;
+        box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+    }
+    .input.small {
+        width: 80px;
+    }
+    .inline-inputs {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+    .inline-inputs .input {
+        margin-bottom: 0;
+        flex: 1;
+    }
+    .btn-primary {
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #8B4A87, #D4A574);
+        color: white;
+        font-weight: 600;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+    }
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(139, 74, 135, 0.3);
+    }
+    .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .btn-secondary {
+        padding: 8px 16px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #374151;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 8px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    .btn-secondary:hover {
+        background: #f1f5f9;
+        border-color: #8B4A87;
+        color: #8B4A87;
+    }
+    .btn-danger {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    .btn-danger.small {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+    .label {
+        display: block;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+    .upload-box {
+        border: 2px dashed #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    .upload-box:hover {
+        border-color: #8B4A87;
+        background: #fafbfc;
+    }
+    .upload-icon {
+        font-size: 36px;
+        color: #9ca3af;
+        margin-bottom: 12px;
+    }
+    .upload-text {
+        color: #6b7280;
+        margin-bottom: 16px;
+        font-size: 15px;
+    }
+    .upload-preview {
+        max-width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 16px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        min-width: 300px;
+    }
+    .toast-success {
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+    }
+    .toast-error {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    .toast-info {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+    .capitalize {
+        text-transform: capitalize;
+    }
+</style>

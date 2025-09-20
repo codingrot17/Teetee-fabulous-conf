@@ -1,18 +1,18 @@
-// Appwrite Configuration
-import { Client, Account, Databases, Storage, Query, Permission, Role } from 'https://cdn.skypack.dev/appwrite@13.0.0';
+// Enhanced Appwrite Configuration for TEETEE FABULOUS
+import { Client, Account, Databases, Storage, Query, Permission, Role, ID } from 'https://cdn.skypack.dev/appwrite@13.0.0';
 
-// Appwrite configuration
+// Appwrite configuration - UPDATE THESE VALUES
 const APPWRITE_CONFIG = {
-    endpoint: 'https://cloud.appwrite.io/v1', // Replace with your Appwrite endpoint
-    projectId: 'your-project-id', // Replace with your Appwrite project ID
-    databaseId: 'teetee-fabulous-db',
+    endpoint: 'https://cloud.appwrite.io/v1', 
+    projectId: '68ca0f1c00035ab92fa8', 
+    databaseId: '68cdb1dc00266358cd6b',
     collections: {
         products: 'products',
         categories: 'categories',
-        content: 'content',
+        site_content: 'site_content',
         orders: 'orders',
-        settings: 'settings',
-        users: 'users'
+        users: 'users',
+        settings: 'settings'
     },
     bucketId: 'cake-images'
 };
@@ -26,20 +26,37 @@ const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
 
-// Admin Authentication Functions
+// Enhanced Authentication Service
 class AuthService {
     async login(email, password) {
         try {
+            // Create session
             const session = await account.createEmailSession(email, password);
             
-            // Check if user has admin privileges
+            // Get user details
             const user = await account.get();
-            if (!this.isAdmin(user)) {
+            
+            // Verify admin role by checking user document
+            const userDoc = await databases.getDocument(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.users,
+                user.$id
+            );
+            
+            if (userDoc.role !== 'admin') {
                 await account.deleteSession('current');
                 throw new Error('Access denied. Admin privileges required.');
             }
             
-            return { user, session };
+            // Update last login
+            await databases.updateDocument(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.users,
+                user.$id,
+                { last_login: new Date().toISOString() }
+            );
+            
+            return { user: userDoc, session };
         } catch (error) {
             throw new Error(`Login failed: ${error.message}`);
         }
@@ -57,7 +74,15 @@ class AuthService {
     async getCurrentUser() {
         try {
             const user = await account.get();
-            return user;
+            
+            // Get full user document with role information
+            const userDoc = await databases.getDocument(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.users,
+                user.$id
+            );
+            
+            return userDoc;
         } catch (error) {
             return null;
         }
@@ -65,7 +90,8 @@ class AuthService {
 
     async createAdminUser(email, password, name) {
         try {
-            const user = await account.create('unique()', email, password, name);
+            // Create Appwrite auth user
+            const user = await account.create(ID.unique(), email, password, name);
             
             // Create user document with admin role
             await databases.createDocument(
@@ -76,8 +102,13 @@ class AuthService {
                     email,
                     name,
                     role: 'admin',
+                    status: 'active',
                     created_at: new Date().toISOString()
-                }
+                },
+                [
+                    Permission.read(Role.user(user.$id)),
+                    Permission.update(Role.user(user.$id))
+                ]
             );
             
             return user;
@@ -86,15 +117,10 @@ class AuthService {
         }
     }
 
-    isAdmin(user) {
-        // Check user labels or custom attributes for admin role
-        return user.labels && user.labels.includes('admin');
-    }
-
     async checkAuthState() {
         try {
             const user = await this.getCurrentUser();
-            if (user && this.isAdmin(user)) {
+            if (user && user.role === 'admin' && user.status === 'active') {
                 return { authenticated: true, user };
             }
             return { authenticated: false, user: null };
@@ -104,9 +130,9 @@ class AuthService {
     }
 }
 
-// Database Service for CRUD operations
+// Enhanced Database Service
 class DatabaseService {
-    // Product Management
+    // Products Management
     async createProduct(productData, imageFiles = []) {
         try {
             // Upload images first
@@ -114,7 +140,7 @@ class DatabaseService {
             for (const file of imageFiles) {
                 const fileResponse = await storage.createFile(
                     APPWRITE_CONFIG.bucketId,
-                    'unique()',
+                    ID.unique(),
                     file
                 );
                 imageIds.push(fileResponse.$id);
@@ -124,12 +150,16 @@ class DatabaseService {
             const product = await databases.createDocument(
                 APPWRITE_CONFIG.databaseId,
                 APPWRITE_CONFIG.collections.products,
-                'unique()',
+                ID.unique(),
                 {
-                    ...productData,
+                    name: productData.name,
+                    description: productData.description,
+                    price: parseInt(productData.price),
+                    category: productData.category,
+                    status: productData.status || 'active',
                     images: imageIds,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    $createdAt: new Date().toISOString(),
+                    $updatedAt: new Date().toISOString()
                 },
                 [
                     Permission.read(Role.any()),
@@ -166,6 +196,12 @@ class DatabaseService {
                 queries
             );
 
+            // Add image URLs to products
+            products.documents = products.documents.map(product => ({
+                ...product,
+                imageUrls: product.images?.map(imageId => this.getImageUrl(imageId)) || []
+            }));
+
             return products;
         } catch (error) {
             throw new Error(`Failed to fetch products: ${error.message}`);
@@ -175,25 +211,31 @@ class DatabaseService {
     async updateProduct(productId, updateData, newImages = []) {
         try {
             // Upload new images if provided
-            if (newImages.length > 0) {
-                const imageIds = [];
-                for (const file of newImages) {
-                    const fileResponse = await storage.createFile(
-                        APPWRITE_CONFIG.bucketId,
-                        'unique()',
-                        file
-                    );
-                    imageIds.push(fileResponse.$id);
-                }
-                updateData.images = [...(updateData.images || []), ...imageIds];
+            const newImageIds = [];
+            for (const file of newImages) {
+                const fileResponse = await storage.createFile(
+                    APPWRITE_CONFIG.bucketId,
+                    ID.unique(),
+                    file
+                );
+                newImageIds.push(fileResponse.$id);
             }
+
+            // Combine existing and new images
+            const existingImages = updateData.existingImages || [];
+            const allImages = [...existingImages, ...newImageIds];
 
             const product = await databases.updateDocument(
                 APPWRITE_CONFIG.databaseId,
                 APPWRITE_CONFIG.collections.products,
                 productId,
                 {
-                    ...updateData,
+                    name: updateData.name,
+                    description: updateData.description,
+                    price: parseInt(updateData.price),
+                    category: updateData.category,
+                    status: updateData.status,
+                    images: allImages,
                     updated_at: new Date().toISOString()
                 }
             );
@@ -237,50 +279,47 @@ class DatabaseService {
         }
     }
 
-    // Content Management
+    // Site Content Management
     async updateSiteContent(section, contentData) {
         try {
-            // Try to update existing content
-            try {
-                const existingContent = await databases.listDocuments(
-                    APPWRITE_CONFIG.databaseId,
-                    APPWRITE_CONFIG.collections.content,
-                    [Query.equal('section_name', section)]
-                );
-
-                if (existingContent.documents.length > 0) {
-                    // Update existing
-                    return await databases.updateDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.content,
-                        existingContent.documents[0].$id,
-                        {
-                            content_data: JSON.stringify(contentData),
-                            updated_at: new Date().toISOString()
-                        }
-                    );
-                }
-            } catch (error) {
-                // Content doesn't exist, create new
-            }
-
-            // Create new content entry
-            return await databases.createDocument(
+            const user = await authService.getCurrentUser();
+            
+            // Try to find existing content
+            const existingContent = await databases.listDocuments(
                 APPWRITE_CONFIG.databaseId,
-                APPWRITE_CONFIG.collections.content,
-                'unique()',
-                {
-                    section_name: section,
-                    content_type: 'json',
-                    content_data: JSON.stringify(contentData),
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                },
-                [
-                    Permission.read(Role.any()),
-                    Permission.update(Role.user('admin'))
-                ]
+                APPWRITE_CONFIG.collections.site_content,
+                [Query.equal('section_name', section)]
             );
+
+            const contentPayload = {
+                section_name: section,
+                content_type: 'json',
+                content_data: JSON.stringify(contentData),
+                updated_at: new Date().toISOString(),
+                updated_by: user?.$id || 'unknown'
+            };
+
+            if (existingContent.documents.length > 0) {
+                // Update existing
+                return await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collections.site_content,
+                    existingContent.documents[0].$id,
+                    contentPayload
+                );
+            } else {
+                // Create new
+                return await databases.createDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collections.site_content,
+                    ID.unique(),
+                    contentPayload,
+                    [
+                        Permission.read(Role.any()),
+                        Permission.update(Role.user('admin'))
+                    ]
+                );
+            }
         } catch (error) {
             throw new Error(`Content update failed: ${error.message}`);
         }
@@ -290,7 +329,7 @@ class DatabaseService {
         try {
             const content = await databases.listDocuments(
                 APPWRITE_CONFIG.databaseId,
-                APPWRITE_CONFIG.collections.content,
+                APPWRITE_CONFIG.collections.site_content,
                 [Query.equal('section_name', section)]
             );
 
@@ -300,7 +339,8 @@ class DatabaseService {
             
             return null;
         } catch (error) {
-            throw new Error(`Failed to fetch content: ${error.message}`);
+            console.warn(`Failed to fetch content for ${section}:`, error);
+            return null;
         }
     }
 
@@ -310,9 +350,13 @@ class DatabaseService {
             return await databases.createDocument(
                 APPWRITE_CONFIG.databaseId,
                 APPWRITE_CONFIG.collections.categories,
-                'unique()',
+                ID.unique(),
                 {
-                    ...categoryData,
+                    name: categoryData.name,
+                    description: categoryData.description || '',
+                    color: categoryData.color || '#8B4A87',
+                    display_order: categoryData.display_order || 0,
+                    status: categoryData.status || 'active',
                     created_at: new Date().toISOString()
                 },
                 [
@@ -344,11 +388,17 @@ class DatabaseService {
             return await databases.createDocument(
                 APPWRITE_CONFIG.databaseId,
                 APPWRITE_CONFIG.collections.orders,
-                'unique()',
+                ID.unique(),
                 {
-                    ...orderData,
+                    customer_name: orderData.customer_name,
+                    customer_email: orderData.customer_email,
+                    customer_phone: orderData.customer_phone || '',
+                    service_type: orderData.service_type,
+                    message: orderData.message,
                     status: 'pending',
-                    order_date: new Date().toISOString()
+                    notes: '',
+                    order_date: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
                 },
                 [
                     Permission.read(Role.user('admin')),
@@ -360,12 +410,16 @@ class DatabaseService {
         }
     }
 
-    async getOrders(status = null) {
+    async getOrders(filters = {}) {
         try {
             const queries = [Query.orderDesc('order_date')];
             
-            if (status) {
-                queries.push(Query.equal('status', status));
+            if (filters.status) {
+                queries.push(Query.equal('status', filters.status));
+            }
+
+            if (filters.limit) {
+                queries.push(Query.limit(filters.limit));
             }
 
             return await databases.listDocuments(
@@ -378,12 +432,29 @@ class DatabaseService {
         }
     }
 
-    // File/Image Management
-    async uploadImage(file, folder = 'general') {
+    async updateOrderStatus(orderId, status, notes = '') {
+        try {
+            return await databases.updateDocument(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.orders,
+                orderId,
+                {
+                    status,
+                    notes,
+                    updated_at: new Date().toISOString()
+                }
+            );
+        } catch (error) {
+            throw new Error(`Order update failed: ${error.message}`);
+        }
+    }
+
+    // File Management
+    async uploadImage(file) {
         try {
             const fileResponse = await storage.createFile(
                 APPWRITE_CONFIG.bucketId,
-                'unique()',
+                ID.unique(),
                 file
             );
 
@@ -399,6 +470,7 @@ class DatabaseService {
     }
 
     getImageUrl(fileId) {
+        if (!fileId) return null;
         return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/view?project=${APPWRITE_CONFIG.projectId}`;
     }
 
@@ -410,11 +482,124 @@ class DatabaseService {
             throw new Error(`Image deletion failed: ${error.message}`);
         }
     }
+
+    // Settings Management
+    async updateSetting(key, value, type = 'text', description = '') {
+        try {
+            // Check if setting exists
+            const existing = await databases.listDocuments(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.settings,
+                [Query.equal('setting_key', key)]
+            );
+
+            const settingData = {
+                setting_key: key,
+                setting_value: value,
+                setting_type: type,
+                description: description,
+                updated_at: new Date().toISOString()
+            };
+
+            if (existing.documents.length > 0) {
+                // Update existing
+                return await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collections.settings,
+                    existing.documents[0].$id,
+                    settingData
+                );
+            } else {
+                // Create new
+                return await databases.createDocument(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.collections.settings,
+                    ID.unique(),
+                    settingData,
+                    [
+                        Permission.read(Role.any()),
+                        Permission.update(Role.user('admin'))
+                    ]
+                );
+            }
+        } catch (error) {
+            throw new Error(`Setting update failed: ${error.message}`);
+        }
+    }
+
+    async getSetting(key) {
+        try {
+            const setting = await databases.listDocuments(
+                APPWRITE_CONFIG.databaseId,
+                APPWRITE_CONFIG.collections.settings,
+                [Query.equal('setting_key', key)]
+            );
+
+            if (setting.documents.length > 0) {
+                const doc = setting.documents[0];
+                let value = doc.setting_value;
+                
+                // Parse based on type
+                if (doc.setting_type === 'json') {
+                    value = JSON.parse(value);
+                } else if (doc.setting_type === 'number') {
+                    value = parseFloat(value);
+                } else if (doc.setting_type === 'boolean') {
+                    value = value === 'true';
+                }
+                
+                return value;
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn(`Failed to fetch setting ${key}:`, error);
+            return null;
+        }
+    }
 }
 
 // Initialize services
 const authService = new AuthService();
 const dbService = new DatabaseService();
+
+// Utility function to initialize default data
+async function initializeDefaultData() {
+    try {
+        // Check if we have any products
+        const products = await dbService.getProducts({ limit: 1 });
+        
+        if (products.total === 0) {
+            console.log('No products found, creating sample data...');
+            
+            // Create default categories
+            await dbService.createCategory({
+                name: 'Premium',
+                description: 'High-quality cakes with premium ingredients',
+                color: '#D4A574',
+                display_order: 1
+            });
+            
+            await dbService.createCategory({
+                name: 'VIP',
+                description: 'Luxury cakes with premium decorations',
+                color: '#8B4A87',
+                display_order: 2
+            });
+            
+            await dbService.createCategory({
+                name: 'Special',
+                description: 'Limited edition and special occasion cakes',
+                color: '#e74c3c',
+                display_order: 3
+            });
+            
+            console.log('Default data initialized successfully');
+        }
+    } catch (error) {
+        console.error('Error initializing default data:', error);
+    }
+}
 
 // Export services and config
 export {
@@ -425,7 +610,9 @@ export {
     storage,
     authService,
     dbService,
+    initializeDefaultData,
     Query,
     Permission,
-    Role
+    Role,
+    ID
 };
