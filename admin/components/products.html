@@ -1,4 +1,4 @@
-<!-- Updated Products Management Component - Save as components/products.html -->
+<!-- Enhanced Products Management Component -->
 <div x-data="{
     // State
     products: [],
@@ -12,8 +12,14 @@
     // Modal state
     showAddProductModal: false,
     showEditProductModal: false,
+    showDeleteModal: false,
     editingProduct: null,
+    deletingProduct: null,
     saving: false,
+    
+    // View state
+    viewMode: 'grid', // grid or list
+    sortBy: 'newest',
     
     // Form data
     productForm: {
@@ -34,12 +40,10 @@
     async loadData() {
         this.loading = true;
         try {
-            // Check if services are available globally
             if (!window.dbService) {
                 throw new Error('Appwrite services not loaded. Please refresh the page.');
             }
             
-            // Load products and categories
             const [productsResult, categoriesResult] = await Promise.all([
                 window.dbService.getProducts(),
                 window.dbService.getCategories()
@@ -48,47 +52,68 @@
             this.products = productsResult.documents || [];
             this.categories = categoriesResult.documents || [];
             this.filteredProducts = [...this.products];
+            this.applyFilters();
             
             console.log('Loaded products:', this.products.length);
             console.log('Loaded categories:', this.categories.length);
             
         } catch (error) {
             console.error('Error loading data:', error);
-            this.showNotification('Failed to load data. Please check your Appwrite configuration and refresh the page.', 'error');
+            this.showNotification('Failed to load data. Please check your configuration and refresh the page.', 'error');
         } finally {
             this.loading = false;
         }
     },
 
-    // Filter products
-    filterProducts() {
+    applyFilters() {
         let filtered = [...this.products];
 
+        // Search filter
         if (this.searchQuery) {
             const query = this.searchQuery.toLowerCase();
             filtered = filtered.filter(product => 
                 product.name.toLowerCase().includes(query) ||
-                product.description.toLowerCase().includes(query)
+                product.description.toLowerCase().includes(query) ||
+                product.category.toLowerCase().includes(query)
             );
         }
 
+        // Category filter
         if (this.selectedCategory) {
             filtered = filtered.filter(product => product.category === this.selectedCategory);
         }
 
+        // Status filter
         if (this.selectedStatus) {
             filtered = filtered.filter(product => product.status === this.selectedStatus);
+        }
+
+        // Sort products
+        switch (this.sortBy) {
+            case 'newest':
+                filtered.sort((a, b) => new Date(b.$createdAt) - new Date(a.$createdAt));
+                break;
+            case 'oldest':
+                filtered.sort((a, b) => new Date(a.$createdAt) - new Date(b.$createdAt));
+                break;
+            case 'name':
+                filtered.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case 'price-high':
+                filtered.sort((a, b) => b.price - a.price);
+                break;
+            case 'price-low':
+                filtered.sort((a, b) => a.price - b.price);
+                break;
         }
 
         this.filteredProducts = filtered;
     },
 
-    // Get category color
     getCategoryColor(category) {
         const categoryObj = this.categories.find(cat => cat.name.toLowerCase() === category.toLowerCase());
         if (categoryObj) return categoryObj.color;
         
-        // Fallback colors
         const colors = {
             premium: '#D4A574',
             vip: '#8B4A87',
@@ -97,7 +122,11 @@
         return colors[category] || '#6b7280';
     },
 
-    // Product actions
+    openAddModal() {
+        this.resetForm();
+        this.showAddProductModal = true;
+    },
+
     editProduct(product) {
         this.editingProduct = product;
         this.productForm = {
@@ -113,21 +142,33 @@
         this.showEditProductModal = true;
     },
 
+    confirmDelete(product) {
+        this.deletingProduct = product;
+        this.showDeleteModal = true;
+    },
+
     async saveProduct() {
         this.saving = true;
-
         try {
             if (!window.dbService) {
                 throw new Error('Database service not available');
             }
 
+            // Validation
+            if (!this.productForm.name.trim() || !this.productForm.description.trim() || !this.productForm.price || !this.productForm.category) {
+                throw new Error('Please fill in all required fields');
+            }
+
+            if (this.productForm.price <= 0) {
+                throw new Error('Price must be greater than 0');
+            }
+
             if (this.showEditProductModal) {
-                // Update existing product
                 await window.dbService.updateProduct(
                     this.editingProduct.$id,
                     {
-                        name: this.productForm.name,
-                        description: this.productForm.description,
+                        name: this.productForm.name.trim(),
+                        description: this.productForm.description.trim(),
                         price: this.productForm.price,
                         category: this.productForm.category,
                         status: this.productForm.active ? 'active' : 'inactive',
@@ -135,27 +176,27 @@
                     },
                     this.productForm.imageFiles
                 );
+                this.showNotification('Product updated successfully!', 'success');
             } else {
-                // Add new product
                 await window.dbService.createProduct(
                     {
-                        name: this.productForm.name,
-                        description: this.productForm.description,
+                        name: this.productForm.name.trim(),
+                        description: this.productForm.description.trim(),
                         price: this.productForm.price,
                         category: this.productForm.category,
                         status: this.productForm.active ? 'active' : 'inactive'
                     },
                     this.productForm.imageFiles
                 );
+                this.showNotification('Product created successfully!', 'success');
             }
 
             this.closeModal();
-            await this.loadData(); // Reload data
-            this.showNotification('Product saved successfully!', 'success');
+            await this.loadData();
             
         } catch (error) {
             console.error('Save error:', error);
-            this.showNotification('Failed to save product. Please try again.', 'error');
+            this.showNotification(error.message || 'Failed to save product. Please try again.', 'error');
         } finally {
             this.saving = false;
         }
@@ -187,36 +228,42 @@
         }
     },
 
-    async deleteProduct(product) {
-        if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-            try {
-                if (!window.dbService) {
-                    throw new Error('Database service not available');
-                }
-                
-                await window.dbService.deleteProduct(product.$id);
-                
-                // Remove from local array
-                const index = this.products.findIndex(p => p.$id === product.$id);
-                if (index !== -1) {
-                    this.products.splice(index, 1);
-                    this.filterProducts();
-                }
-                
-                this.showNotification('Product deleted successfully!', 'success');
-                
-            } catch (error) {
-                console.error('Delete error:', error);
-                this.showNotification('Failed to delete product.', 'error');
+    async deleteProduct() {
+        if (!this.deletingProduct) return;
+        
+        try {
+            if (!window.dbService) {
+                throw new Error('Database service not available');
             }
+            
+            await window.dbService.deleteProduct(this.deletingProduct.$id);
+            
+            const index = this.products.findIndex(p => p.$id === this.deletingProduct.$id);
+            if (index !== -1) {
+                this.products.splice(index, 1);
+                this.applyFilters();
+            }
+            
+            this.showNotification('Product deleted successfully!', 'success');
+            this.showDeleteModal = false;
+            this.deletingProduct = null;
+            
+        } catch (error) {
+            console.error('Delete error:', error);
+            this.showNotification('Failed to delete product.', 'error');
         }
     },
 
-    // Modal management
     closeModal() {
         this.showAddProductModal = false;
         this.showEditProductModal = false;
+        this.showDeleteModal = false;
         this.editingProduct = null;
+        this.deletingProduct = null;
+        this.resetForm();
+    },
+
+    resetForm() {
         this.productForm = {
             name: '',
             description: '',
@@ -229,20 +276,33 @@
         };
     },
 
-    // Image handling
     handleImageUpload(event) {
         const files = Array.from(event.target.files);
         
         files.forEach(file => {
+            // Check file size (10MB limit)
+            if (file.size > 10 * 1024 * 1024) {
+                this.showNotification(`File ${file.name} is too large. Maximum size is 10MB.`, 'error');
+                return;
+            }
+
+            // Check file type
+            if (!file.type.startsWith('image/')) {
+                this.showNotification(`File ${file.name} is not an image.`, 'error');
+                return;
+            }
+
             this.productForm.imageFiles.push(file);
             
-            // Create preview
             const reader = new FileReader();
             reader.onload = (e) => {
                 this.productForm.imagePreviews.push(e.target.result);
             };
             reader.readAsDataURL(file);
         });
+
+        // Reset input
+        event.target.value = '';
     },
 
     removeNewImage(index) {
@@ -256,12 +316,8 @@
                 throw new Error('Database service not available');
             }
             
-            // Remove from Appwrite storage
             await window.dbService.deleteImage(imageId);
-            
-            // Remove from form
             this.productForm.existingImages.splice(index, 1);
-            
             this.showNotification('Image removed successfully!', 'success');
             
         } catch (error) {
@@ -271,48 +327,109 @@
     },
 
     getImageUrl(imageId) {
-        if (!imageId) return 'https://via.placeholder.com/300x200/8B4A87/FFFFFF?text=No+Image';
+        if (!imageId) return 'https://via.placeholder.com/300x200/f3f4f6/9ca3af?text=No+Image';
         
         const { APPWRITE_CONFIG } = window;
         if (APPWRITE_CONFIG) {
             return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${imageId}/view?project=${APPWRITE_CONFIG.projectId}`;
         }
         
-        return 'https://via.placeholder.com/300x200/8B4A87/FFFFFF?text=Loading...';
+        return 'https://via.placeholder.com/300x200/f3f4f6/9ca3af?text=Loading...';
     },
 
-    // Notifications
+    formatPrice(price) {
+        return new Intl.NumberFormat('en-NG', {
+            style: 'currency',
+            currency: 'NGN',
+            minimumFractionDigits: 0
+        }).format(price);
+    },
+
+    formatDate(date) {
+        return new Date(date).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    },
+
     showNotification(message, type = 'info') {
-        // Create toast notification
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.innerHTML = `
-            <span>${message}</span>
-            <button onclick='this.parentElement.remove()' style='margin-left: 12px; background: none; border: none; color: white; cursor: pointer;'>×</button>
+            <div class='toast-content'>
+                <i class='toast-icon ${type === 'success' ? 'fas fa-check-circle' : type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'}'></i>
+                <span>${message}</span>
+            </div>
+            <button onclick='this.parentElement.remove()' class='toast-close'>
+                <i class='fas fa-times'></i>
+            </button>
         `;
         
-        // Add styles if not already present
-        if (!document.querySelector('#toast-styles')) {
+        if (!document.querySelector('#enhanced-toast-styles')) {
             const style = document.createElement('style');
-            style.id = 'toast-styles';
+            style.id = 'enhanced-toast-styles';
             style.textContent = `
                 .toast {
                     position: fixed;
                     top: 20px;
                     right: 20px;
-                    padding: 12px 20px;
-                    border-radius: 8px;
+                    min-width: 320px;
+                    padding: 16px 20px;
+                    border-radius: 12px;
                     color: white;
                     font-weight: 500;
                     z-index: 10000;
-                    animation: slideIn 0.3s ease;
+                    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 4.7s;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                    backdrop-filter: blur(8px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 12px;
                 }
-                .toast-success { background: #22c55e; }
-                .toast-error { background: #ef4444; }
-                .toast-info { background: #3b82f6; }
-                @keyframes slideIn {
-                    from { transform: translateX(400px); }
-                    to { transform: translateX(0); }
+                .toast-success { 
+                    background: linear-gradient(135deg, #10b981, #059669);
+                    border-left: 4px solid #34d399;
+                }
+                .toast-error { 
+                    background: linear-gradient(135deg, #ef4444, #dc2626);
+                    border-left: 4px solid #f87171;
+                }
+                .toast-info { 
+                    background: linear-gradient(135deg, #3b82f6, #2563eb);
+                    border-left: 4px solid #60a5fa;
+                }
+                .toast-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex: 1;
+                }
+                .toast-icon {
+                    font-size: 18px;
+                }
+                .toast-close {
+                    background: none;
+                    border: none;
+                    color: white;
+                    cursor: pointer;
+                    padding: 4px;
+                    border-radius: 4px;
+                    opacity: 0.8;
+                    transition: opacity 0.2s ease;
+                }
+                .toast-close:hover {
+                    opacity: 1;
+                    background: rgba(255, 255, 255, 0.1);
+                }
+                @keyframes slideInRight {
+                    from { transform: translateX(400px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; transform: translateX(400px); }
                 }
             `;
             document.head.appendChild(style);
@@ -320,7 +437,6 @@
         
         document.body.appendChild(toast);
         
-        // Auto remove after 5 seconds
         setTimeout(() => {
             if (toast.parentElement) {
                 toast.remove();
@@ -328,143 +444,279 @@
         }, 5000);
     }
 }">
+
     <!-- Loading State -->
-    <div x-show="loading" style="display: flex; justify-content: center; align-items: center; padding: 60px;">
-        <div style="width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top: 3px solid #8B4A87; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <div x-show="loading" class="loading-state">
+        <div class="loading-spinner-enhanced">
+            <div class="spinner"></div>
+            <p>Loading products...</p>
+        </div>
     </div>
 
     <!-- Main Content -->
-    <div x-show="!loading">
-        <!-- Header with Add Product Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-            <h2 style="font-size: 24px; font-weight: 600; color: #1e293b;">Products Management</h2>
-            <button 
-                @click="showAddProductModal = true" 
-                style="background: linear-gradient(135deg, #8B4A87, #D4A574); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s ease;"
-                onmouseover="this.style.transform='translateY(-2px)'"
-                onmouseout="this.style.transform='translateY(0)'"
-            >
-                <i class="fas fa-plus"></i>
-                Add New Product
-            </button>
-        </div>
-
-        <!-- Products Filter Bar -->
-        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); margin-bottom: 24px;">
-            <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 250px;">
-                    <input 
-                        type="text" 
-                        placeholder="Search products..." 
-                        x-model="searchQuery"
-                        @input="filterProducts"
-                        style="width: 100%; padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;"
-                    >
+    <div x-show="!loading" class="products-container">
+        <!-- Header Section -->
+        <div class="products-header">
+            <div class="header-content">
+                <div class="header-title">
+                    <h2>Products Management</h2>
+                    <p>Manage your cake inventory and product catalog</p>
                 </div>
-                <select 
-                    x-model="selectedCategory" 
-                    @change="filterProducts"
-                    style="padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 150px;"
-                >
-                    <option value="">All Categories</option>
-                    <template x-for="category in categories" :key="category.$id">
-                        <option :value="category.name.toLowerCase()" x-text="category.name"></option>
-                    </template>
-                </select>
-                <select 
-                    x-model="selectedStatus" 
-                    @change="filterProducts"
-                    style="padding: 10px 16px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; min-width: 120px;"
-                >
-                    <option value="">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                </select>
+                <button @click="openAddModal" class="btn-primary-enhanced">
+                    <i class="fas fa-plus"></i>
+                    Add New Product
+                </button>
             </div>
         </div>
 
-        <!-- Products Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; margin-bottom: 32px;">
+        <!-- Filters and Controls Bar -->
+        <div class="controls-bar">
+            <!-- Search -->
+            <div class="search-container">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        placeholder="Search products by name, description, or category..." 
+                        x-model="searchQuery"
+                        @input="applyFilters"
+                        class="search-input"
+                    >
+                    <button 
+                        x-show="searchQuery" 
+                        @click="searchQuery = ''; applyFilters()" 
+                        class="search-clear"
+                    >
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filters-container">
+                <!-- Category Filter -->
+                <div class="filter-group">
+                    <select 
+                        x-model="selectedCategory" 
+                        @change="applyFilters"
+                        class="filter-select"
+                    >
+                        <option value="">All Categories</option>
+                        <template x-for="category in categories" :key="category.$id">
+                            <option :value="category.name.toLowerCase()" x-text="category.name"></option>
+                        </template>
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="filter-group">
+                    <select 
+                        x-model="selectedStatus" 
+                        @change="applyFilters"
+                        class="filter-select"
+                    >
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+
+                <!-- Sort -->
+                <div class="filter-group">
+                    <select 
+                        x-model="sortBy" 
+                        @change="applyFilters"
+                        class="filter-select"
+                    >
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name">Name A-Z</option>
+                        <option value="price-high">Price High-Low</option>
+                        <option value="price-low">Price Low-High</option>
+                    </select>
+                </div>
+
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <button 
+                        @click="viewMode = 'grid'" 
+                        :class="viewMode === 'grid' ? 'active' : ''" 
+                        class="view-btn"
+                        title="Grid View"
+                    >
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button 
+                        @click="viewMode = 'list'" 
+                        :class="viewMode === 'list' ? 'active' : ''" 
+                        class="view-btn"
+                        title="List View"
+                    >
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Info -->
+        <div class="results-info">
+            <div class="results-count">
+                <span x-text="filteredProducts.length"></span> of <span x-text="products.length"></span> products
+                <span x-show="searchQuery || selectedCategory || selectedStatus" class="filtered-indicator">
+                    (filtered)
+                    <button @click="searchQuery = ''; selectedCategory = ''; selectedStatus = ''; applyFilters()" class="clear-filters">
+                        Clear filters
+                    </button>
+                </span>
+            </div>
+        </div>
+
+        <!-- Products Grid/List -->
+        <div :class="viewMode === 'grid' ? 'products-grid' : 'products-list'">
             <template x-for="product in filteredProducts" :key="product.$id">
-                <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); transition: all 0.3s ease;" 
-                     :class="{ 'opacity-60': product.status === 'inactive' }"
-                     onmouseover="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 25px rgba(0, 0, 0, 0.15)'"
-                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(0, 0, 0, 0.1)'"
-                >
-                    <!-- Product Image -->
-                    <div style="position: relative; height: 200px; overflow: hidden;">
+                <!-- Grid View Card -->
+                <div x-show="viewMode === 'grid'" class="product-card">
+                    <div class="product-image-container">
                         <img 
                             :src="product.imageUrls && product.imageUrls.length > 0 ? product.imageUrls[0] : getImageUrl(null)"
                             :alt="product.name"
-                            style="width: 100%; height: 100%; object-fit: cover;"
+                            class="product-image"
+                            loading="lazy"
                         >
-                        <div style="position: absolute; top: 12px; right: 12px;">
+                        <div class="product-status-badge">
                             <span 
-                                style="padding: 4px 8px; border-radius: 12px; color: white; font-size: 11px; font-weight: 600; text-transform: uppercase;"
-                                :style="`background: ${product.status === 'active' ? '#22c55e' : '#ef4444'}`"
+                                :class="product.status === 'active' ? 'status-active' : 'status-inactive'"
+                                class="status-badge"
                                 x-text="product.status"
                             ></span>
                         </div>
-                        <div style="position: absolute; top: 12px; left: 12px;">
+                        <div class="product-category-badge">
                             <span 
-                                style="padding: 4px 8px; border-radius: 12px; color: white; font-size: 11px; font-weight: 600; text-transform: uppercase;"
+                                class="category-badge"
                                 :style="`background: ${getCategoryColor(product.category)}`"
                                 x-text="product.category"
                             ></span>
                         </div>
                     </div>
 
-                    <!-- Product Info -->
-                    <div style="padding: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
-                            <h3 style="font-size: 18px; font-weight: 600; color: #1e293b; margin: 0;" x-text="product.name"></h3>
-                            <div style="text-align: right;">
-                                <div style="font-size: 20px; font-weight: 700; color: #8B4A87;" x-text="'₦' + product.price.toLocaleString()"></div>
-                            </div>
+                    <div class="product-content">
+                        <div class="product-header">
+                            <h3 class="product-title" x-text="product.name"></h3>
+                            <div class="product-price" x-text="formatPrice(product.price)"></div>
                         </div>
                         
-                        <p style="color: #64748b; font-size: 14px; line-height: 1.5; margin-bottom: 16px;" x-text="product.description"></p>
+                        <p class="product-description" x-text="product.description.length > 100 ? product.description.substring(0, 100) + '...' : product.description"></p>
                         
-                        <div style="display: flex; gap: 8px;">
-                            <button 
-                                @click="editProduct(product)"
-                                style="flex: 1; padding: 8px 16px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; color: #374151; font-size: 14px; cursor: pointer; transition: all 0.3s ease;"
-                                onmouseover="this.style.background='#e2e8f0'"
-                                onmouseout="this.style.background='#f1f5f9'"
-                            >
-                                <i class="fas fa-edit"></i> Edit
+                        <div class="product-meta">
+                            <span class="meta-item">
+                                <i class="fas fa-calendar"></i>
+                                <span x-text="formatDate(product.$createdAt)"></span>
+                            </span>
+                            <span class="meta-item" x-show="product.images && product.images.length > 0">
+                                <i class="fas fa-images"></i>
+                                <span x-text="product.images.length + (product.images.length === 1 ? ' image' : ' images')"></span>
+                            </span>
+                        </div>
+                        
+                        <div class="product-actions">
+                            <button @click="editProduct(product)" class="btn-secondary-sm">
+                                <i class="fas fa-edit"></i>
+                                Edit
                             </button>
                             <button 
                                 @click="toggleProductStatus(product)"
-                                :style="`flex: 1; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.3s ease; border: none; color: white; background: ${product.status === 'active' ? '#f59e0b' : '#22c55e'}`"
+                                :class="product.status === 'active' ? 'btn-warning-sm' : 'btn-success-sm'"
+                                class="btn-sm"
                             >
                                 <i :class="product.status === 'active' ? 'fas fa-pause' : 'fas fa-play'"></i>
                                 <span x-text="product.status === 'active' ? 'Deactivate' : 'Activate'"></span>
                             </button>
-                            <button 
-                                @click="deleteProduct(product)"
-                                style="padding: 8px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626; font-size: 14px; cursor: pointer; transition: all 0.3s ease;"
-                                onmouseover="this.style.background='#fee2e2'"
-                                onmouseout="this.style.background='#fef2f2'"
-                            >
+                            <button @click="confirmDelete(product)" class="btn-danger-sm">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- List View Item -->
+                <div x-show="viewMode === 'list'" class="product-list-item">
+                    <div class="list-item-image">
+                        <img 
+                            :src="product.imageUrls && product.imageUrls.length > 0 ? product.imageUrls[0] : getImageUrl(null)"
+                            :alt="product.name"
+                            loading="lazy"
+                        >
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-header">
+                            <h3 x-text="product.name"></h3>
+                            <div class="list-item-badges">
+                                <span 
+                                    class="category-badge-sm"
+                                    :style="`background: ${getCategoryColor(product.category)}`"
+                                    x-text="product.category"
+                                ></span>
+                                <span 
+                                    :class="product.status === 'active' ? 'status-active-sm' : 'status-inactive-sm'"
+                                    class="status-badge-sm"
+                                    x-text="product.status"
+                                ></span>
+                            </div>
+                        </div>
+                        <p class="list-item-description" x-text="product.description"></p>
+                        <div class="list-item-meta">
+                            <span class="price" x-text="formatPrice(product.price)"></span>
+                            <span class="date" x-text="'Created ' + formatDate(product.$createdAt)"></span>
+                            <span x-show="product.images && product.images.length > 0" class="images">
+                                <i class="fas fa-images"></i>
+                                <span x-text="product.images.length"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="list-item-actions">
+                        <button @click="editProduct(product)" class="btn-secondary-sm">
+                            <i class="fas fa-edit"></i>
+                            Edit
+                        </button>
+                        <button 
+                            @click="toggleProductStatus(product)"
+                            :class="product.status === 'active' ? 'btn-warning-sm' : 'btn-success-sm'"
+                        >
+                            <i :class="product.status === 'active' ? 'fas fa-pause' : 'fas fa-play'"></i>
+                        </button>
+                        <button @click="confirmDelete(product)" class="btn-danger-sm">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </div>
             </template>
 
             <!-- Empty State -->
             <template x-if="filteredProducts.length === 0 && !loading">
-                <div style="grid-column: 1 / -1; text-align: center; padding: 60px 20px; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                    <div style="font-size: 48px; margin-bottom: 16px;">🍰</div>
-                    <h3 style="font-size: 20px; color: #374151; margin-bottom: 8px;">No Products Found</h3>
-                    <p style="color: #6b7280; margin-bottom: 20px;">Get started by adding your first cake product</p>
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-birthday-cake"></i>
+                    </div>
+                    <h3>No Products Found</h3>
+                    <p x-show="!searchQuery && !selectedCategory && !selectedStatus">
+                        Get started by adding your first cake product to your inventory.
+                    </p>
+                    <p x-show="searchQuery || selectedCategory || selectedStatus">
+                        No products match your current filters. Try adjusting your search criteria.
+                    </p>
                     <button 
-                        @click="showAddProductModal = true"
-                        style="background: linear-gradient(135deg, #8B4A87, #D4A574); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;"
+                        x-show="!searchQuery && !selectedCategory && !selectedStatus"
+                        @click="openAddModal"
+                        class="btn-primary-enhanced"
                     >
                         Add Your First Product
+                    </button>
+                    <button 
+                        x-show="searchQuery || selectedCategory || selectedStatus"
+                        @click="searchQuery = ''; selectedCategory = ''; selectedStatus = ''; applyFilters()"
+                        class="btn-secondary-enhanced"
+                    >
+                        Clear Filters
                     </button>
                 </div>
             </template>
@@ -474,72 +726,70 @@
     <!-- Add/Edit Product Modal -->
     <div 
         x-show="showAddProductModal || showEditProductModal" 
-        style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;"
+        class="modal-overlay"
         @click.self="closeModal()"
-        x-transition
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
     >
-        <div style="background: white; border-radius: 12px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
+        <div 
+            class="modal-container"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95"
+        >
             <!-- Modal Header -->
-            <div style="padding: 24px 24px 0 24px; border-bottom: 1px solid #e2e8f0; margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="font-size: 20px; font-weight: 600; color: #1e293b;" 
-                        x-text="showEditProductModal ? 'Edit Product' : 'Add New Product'">
-                    </h3>
-                    <button 
-                        @click="closeModal()"
-                        style="background: none; border: none; font-size: 20px; color: #6b7280; cursor: pointer; padding: 4px;"
-                    >
-                        <i class="fas fa-times"></i>
-                    </button>
+            <div class="modal-header">
+                <div>
+                    <h3 x-text="showEditProductModal ? 'Edit Product' : 'Add New Product'"></h3>
+                    <p x-text="showEditProductModal ? 'Update product information and images' : 'Create a new product for your catalog'"></p>
                 </div>
+                <button @click="closeModal()" class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
 
             <!-- Modal Form -->
-            <form @submit.prevent="saveProduct()" style="padding: 0 24px 24px 24px;">
-                <!-- Product Name -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Product Name *</label>
-                    <input 
-                        type="text" 
-                        x-model="productForm.name"
-                        required
-                        style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
-                        placeholder="e.g., Premium Chocolate Cake"
-                    >
-                </div>
+            <form @submit.prevent="saveProduct()" class="modal-form">
+                <div class="form-grid">
+                    <!-- Product Name -->
+                    <div class="form-group full-width">
+                        <label class="form-label">Product Name *</label>
+                        <input 
+                            type="text" 
+                            x-model="productForm.name"
+                            required
+                            class="form-input"
+                            placeholder="e.g., Premium Chocolate Wedding Cake"
+                        >
+                    </div>
 
-                <!-- Product Description -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Description *</label>
-                    <textarea 
-                        x-model="productForm.description"
-                        required
-                        rows="3"
-                        style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px; resize: vertical;"
-                        placeholder="Describe your cake..."
-                    ></textarea>
-                </div>
-
-                <!-- Price and Category Row -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
-                    <div>
-                        <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Price (₦) *</label>
+                    <!-- Price and Category Row -->
+                    <div class="form-group">
+                        <label class="form-label">Price (₦) *</label>
                         <input 
                             type="number" 
                             x-model="productForm.price"
                             required
-                            min="0"
+                            min="1"
                             step="100"
-                            style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
+                            class="form-input"
                             placeholder="15000"
                         >
                     </div>
-                    <div>
-                        <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Category *</label>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Category *</label>
                         <select 
                             x-model="productForm.category"
                             required
-                            style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px;"
+                            class="form-select"
                         >
                             <option value="">Select Category</option>
                             <template x-for="category in categories" :key="category.$id">
@@ -549,113 +799,1389 @@
                     </div>
                 </div>
 
+                <!-- Product Description -->
+                <div class="form-group">
+                    <label class="form-label">Description *</label>
+                    <textarea 
+                        x-model="productForm.description"
+                        required
+                        rows="4"
+                        class="form-textarea"
+                        placeholder="Describe your cake in detail - ingredients, design, serving size, etc."
+                    ></textarea>
+                </div>
+
                 <!-- Existing Images (for edit mode) -->
-                <div x-show="showEditProductModal && productForm.existingImages.length > 0" style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 10px; font-size: 14px;">Current Images</label>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;">
+                <div x-show="showEditProductModal && productForm.existingImages.length > 0" class="form-group">
+                    <label class="form-label">Current Images</label>
+                    <div class="image-gallery">
                         <template x-for="(imageId, index) in productForm.existingImages" :key="imageId">
-                            <div style="position: relative;">
-                                <img 
-                                    :src="getImageUrl(imageId)"
-                                    style="width: 100%; height: 80px; object-fit: cover; border-radius: 6px;"
-                                >
+                            <div class="image-item">
+                                <img :src="getImageUrl(imageId)" alt="Product image">
                                 <button 
                                     type="button"
                                     @click="removeExistingImage(imageId, index)"
-                                    style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; background: #ef4444; color: white; border: none; border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;"
+                                    class="image-remove"
+                                    title="Remove image"
                                 >
-                                    ×
+                                    <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </template>
                     </div>
                 </div>
 
-                <!-- Product Images Upload -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">
+                <!-- Image Upload -->
+                <div class="form-group">
+                    <label class="form-label">
                         <span x-text="showEditProductModal ? 'Add More Images' : 'Product Images'"></span>
+                        <span class="label-hint">Upload multiple images (Max 10MB each)</span>
                     </label>
-                    <div style="border: 2px dashed #e2e8f0; border-radius: 8px; padding: 20px; text-align: center;">
-                        <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: #9ca3af; margin-bottom: 12px;"></i>
-                        <p style="color: #6b7280; margin-bottom: 12px;">Click to upload multiple images</p>
+                    <div class="upload-area" @drop.prevent="handleDrop($event)" @dragover.prevent @dragenter.prevent>
                         <input 
                             type="file" 
                             @change="handleImageUpload($event)"
-                            accept="image/*"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                             multiple
-                            style="display: none;"
+                            class="upload-input"
                             id="imageUpload"
                         >
-                        <label 
-                            for="imageUpload"
-                            style="background: #8B4A87; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; display: inline-block; font-size: 14px;"
-                        >
-                            Choose Files
-                        </label>
+                        <div class="upload-content">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <p><strong>Drop images here or click to browse</strong></p>
+                                <p>Supports: JPG, PNG, GIF, WebP up to 10MB each</p>
+                            </div>
+                            <label for="imageUpload" class="upload-button">
+                                <i class="fas fa-plus"></i>
+                                Choose Images
+                            </label>
+                        </div>
                         
                         <!-- New Image Previews -->
-                        <div x-show="productForm.imagePreviews.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 16px;">
+                        <div x-show="productForm.imagePreviews.length > 0" class="image-gallery">
                             <template x-for="(preview, index) in productForm.imagePreviews" :key="index">
-                                <div style="position: relative;">
-                                    <img 
-                                        :src="preview"
-                                        style="width: 100%; height: 80px; object-fit: cover; border-radius: 6px;"
-                                    >
+                                <div class="image-item new-image">
+                                    <img :src="preview" alt="New image preview">
                                     <button 
                                         type="button"
                                         @click="removeNewImage(index)"
-                                        style="position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; background: #ef4444; color: white; border: none; border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center;"
+                                        class="image-remove"
+                                        title="Remove image"
                                     >
-                                        ×
+                                        <i class="fas fa-times"></i>
                                     </button>
+                                    <div class="image-overlay">
+                                        <span class="image-label">New</span>
+                                    </div>
                                 </div>
                             </template>
                         </div>
                     </div>
                 </div>
 
-                <!-- Status -->
-                <div style="margin-bottom: 24px;">
-                    <label style="display: flex; align-items: center; cursor: pointer;">
+                <!-- Status Toggle -->
+                <div class="form-group">
+                    <label class="toggle-label">
                         <input 
                             type="checkbox" 
                             x-model="productForm.active"
-                            style="margin-right: 8px;"
+                            class="toggle-input"
                         >
-                        <span style="font-weight: 500; color: #374151; font-size: 14px;">Active (visible on website)</span>
+                        <div class="toggle-slider"></div>
+                        <span class="toggle-text">
+                            <span class="toggle-title">Product Status</span>
+                            <span class="toggle-desc" x-text="productForm.active ? 'Active - Visible on website' : 'Inactive - Hidden from website'"></span>
+                        </span>
                     </label>
                 </div>
 
                 <!-- Form Actions -->
-                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <div class="form-actions">
                     <button 
                         type="button"
                         @click="closeModal()"
-                        style="padding: 12px 24px; border: 1px solid #e2e8f0; background: white; color: #374151; border-radius: 8px; cursor: pointer; font-weight: 500;"
+                        class="btn-secondary-enhanced"
                     >
                         Cancel
                     </button>
                     <button 
                         type="submit"
                         :disabled="saving"
-                        style="padding: 12px 24px; background: linear-gradient(135deg, #8B4A87, #D4A574); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 8px;"
-                        :style="saving ? 'opacity: 0.7; cursor: not-allowed;' : ''"
+                        class="btn-primary-enhanced"
                     >
-                        <template x-if="saving">
-                            <div style="width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        </template>
-                        <span x-text="saving ? 'Saving...' : (showEditProductModal ? 'Update Product' : 'Add Product')"></span>
+                        <div x-show="saving" class="btn-spinner"></div>
+                        <i x-show="!saving" :class="showEditProductModal ? 'fas fa-save' : 'fas fa-plus'"></i>
+                        <span x-text="saving ? 'Saving...' : (showEditProductModal ? 'Update Product' : 'Create Product')"></span>
                     </button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div 
+        x-show="showDeleteModal" 
+        class="modal-overlay"
+        @click.self="closeModal()"
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+    >
+        <div 
+            class="modal-container modal-sm"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95"
+        >
+            <div class="modal-header">
+                <div>
+                    <h3>Delete Product</h3>
+                    <p>This action cannot be undone</p>
+                </div>
+                <button @click="closeModal()" class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="delete-modal-content">
+                <div class="delete-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="delete-text">
+                    <p>Are you sure you want to delete <strong x-text="deletingProduct?.name"></strong>?</p>
+                    <p class="delete-warning">This will permanently remove the product and all its images from your catalog.</p>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button 
+                    type="button"
+                    @click="closeModal()"
+                    class="btn-secondary-enhanced"
+                >
+                    Cancel
+                </button>
+                <button 
+                    @click="deleteProduct()"
+                    class="btn-danger-enhanced"
+                >
+                    <i class="fas fa-trash"></i>
+                    Delete Product
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Styles -->
     <style>
+        /* Loading State */
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 120px 20px;
+        }
+
+        .loading-spinner-enhanced {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #8B4A87;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .loading-spinner-enhanced p {
+            color: #6b7280;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        /* Main Container */
+        .products-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .products-header {
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            color: white;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .header-title h2 {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            font-family: 'Playfair Display', serif;
+        }
+
+        .header-title p {
+            font-size: 16px;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        /* Enhanced Buttons */
+        .btn-primary-enhanced {
+            background: linear-gradient(135deg, #ffffff, #f8fafc);
+            color: #8B4A87;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary-enhanced:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            background: linear-gradient(135deg, #ffffff, #ffffff);
+        }
+
+        .btn-secondary-enhanced {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn-secondary-enhanced:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Controls Bar */
+        .controls-bar {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Search */
+        .search-container {
+            margin-bottom: 20px;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+            max-width: 500px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 48px 14px 48px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #8B4A87;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #e5e7eb;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            transition: all 0.2s ease;
+        }
+
+        .search-clear:hover {
+            background: #d1d5db;
+            color: #374151;
+        }
+
+        /* Filters */
+        .filters-container {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            min-width: 140px;
+        }
+
+        .filter-select {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            font-size: 14px;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: #8B4A87;
+            box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            display: flex;
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 4px;
+            margin-left: auto;
+        }
+
+        .view-btn {
+            background: none;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn.active {
+            background: white;
+            color: #8B4A87;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .view-btn:hover:not(.active) {
+            color: #374151;
+        }
+
+        /* Results Info */
+        .results-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .filtered-indicator {
+            font-style: italic;
+        }
+
+        .clear-filters {
+            background: none;
+            border: none;
+            color: #8B4A87;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: inherit;
+            margin-left: 8px;
+        }
+
+        .clear-filters:hover {
+            color: #D4A574;
+        }
+
+        /* Products Grid */
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .product-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+            border-color: #8B4A87;
+        }
+
+        .product-image-container {
+            position: relative;
+            height: 240px;
+            overflow: hidden;
+            background: #f3f4f6;
+        }
+
+        .product-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .product-card:hover .product-image {
+            transform: scale(1.05);
+        }
+
+        .product-status-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+        }
+
+        .status-active {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .status-inactive {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        .product-category-badge {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+        }
+
+        .category-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+
+        .product-content {
+            padding: 20px;
+        }
+
+        .product-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        .product-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0;
+            line-height: 1.3;
+            flex: 1;
+        }
+
+        .product-price {
+            font-size: 20px;
+            font-weight: 700;
+            color: #8B4A87;
+            white-space: nowrap;
+        }
+
+        .product-description {
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .product-meta {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .meta-item i {
+            font-size: 12px;
+        }
+
+        .product-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Button Styles */
+        .btn-secondary-sm {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            color: #374151;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .btn-secondary-sm:hover {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .btn-success-sm {
+            background: #10b981;
+            border: 1px solid #059669;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .btn-success-sm:hover {
+            background: #059669;
+        }
+
+        .btn-warning-sm {
+            background: #f59e0b;
+            border: 1px solid #d97706;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .btn-warning-sm:hover {
+            background: #d97706;
+        }
+
+        .btn-danger-sm {
+            background: #ef4444;
+            border: 1px solid #dc2626;
+            color: white;
+            padding: 8px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-danger-sm:hover {
+            background: #dc2626;
+        }
+
+        /* Products List View */
+        .products-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .product-list-item {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .product-list-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #8B4A87;
+        }
+
+        .list-item-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: #f3f4f6;
+        }
+
+        .list-item-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .list-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .list-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+            gap: 16px;
+        }
+
+        .list-item-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0;
+        }
+
+        .list-item-badges {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .category-badge-sm, .status-badge-sm {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+        }
+
+        .status-active-sm {
+            background: #10b981;
+        }
+
+        .status-inactive-sm {
+            background: #ef4444;
+        }
+
+        .list-item-description {
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 12px;
+        }
+
+        .list-item-meta {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .list-item-meta .price {
+            font-size: 16px;
+            font-weight: 600;
+            color: #8B4A87;
+        }
+
+        .list-item-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            grid-column: 1 / -1;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            color: #d1d5db;
+            margin-bottom: 24px;
+        }
+
+        .empty-state h3 {
+            font-size: 24px;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+
+        .empty-state p {
+            color: #6b7280;
+            font-size: 16px;
+            margin-bottom: 24px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-container {
+            background: white;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-sm {
+            max-width: 400px;
+        }
+
+        .modal-header {
+            padding: 24px 24px 0 24px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .modal-header h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0 0 4px 0;
+        }
+
+        .modal-header p {
+            color: #6b7280;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        /* Form Styles */
+        .modal-form {
+            padding: 0 24px 24px 24px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .label-hint {
+            font-weight: 400;
+            color: #9ca3af;
+            font-size: 12px;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+        }
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: #8B4A87;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 32px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            background: #f9fafb;
+        }
+
+        .upload-area:hover, .upload-area.drag-over {
+            border-color: #8B4A87;
+            background: rgba(139, 74, 135, 0.02);
+        }
+
+        .upload-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-content {
+            pointer-events: none;
+        }
+
+        .upload-icon {
+            font-size: 36px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .upload-text p {
+            margin: 0 0 8px 0;
+            color: #374151;
+        }
+
+        .upload-text p:last-child {
+            color: #9ca3af;
+            font-size: 12px;
+        }
+
+        .upload-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #8B4A87;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            pointer-events: all;
+        }
+
+        .upload-button:hover {
+            background: #a855b5;
+        }
+
+        /* Image Gallery */
+        .image-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .image-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f3f4f6;
+            border: 2px solid #e5e7eb;
+            transition: all 0.2s ease;
+        }
+
+        .image-item:hover {
+            border-color: #8B4A87;
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .image-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .image-item:hover .image-remove {
+            opacity: 1;
+        }
+
+        .image-overlay {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            text-align: center;
+        }
+
+        .new-image {
+            border-color: #10b981;
+        }
+
+        /* Toggle Switch */
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .toggle-input {
+            display: none;
+        }
+
+        .toggle-slider {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            background: #d1d5db;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .toggle-input:checked + .toggle-slider {
+            background: #8B4A87;
+        }
+
+        .toggle-input:checked + .toggle-slider::before {
+            transform: translateX(24px);
+        }
+
+        .toggle-text {
+            flex: 1;
+        }
+
+        .toggle-title {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .toggle-desc {
+            display: block;
+            color: #9ca3af;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        /* Form Actions */
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .btn-danger-enhanced {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn-danger-enhanced:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Delete Modal */
+        .delete-modal-content {
+            padding: 0 24px;
+            text-align: center;
+        }
+
+        .delete-icon {
+            font-size: 48px;
+            color: #ef4444;
+            margin-bottom: 16px;
+        }
+
+        .delete-text p {
+            margin: 0 0 8px 0;
+            color: #374151;
+        }
+
+        .delete-warning {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 20px;
+            }
+
+            .controls-bar {
+                padding: 20px;
+            }
+
+            .header-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .products-header {
+                padding: 24px;
+                margin-bottom: 24px;
+            }
+
+            .header-title h2 {
+                font-size: 24px;
+            }
+
+            .products-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .filters-container {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .filter-group {
+                min-width: auto;
+            }
+
+            .view-toggle {
+                margin-left: 0;
+                align-self: flex-start;
+            }
+
+            .product-list-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .list-item-image {
+                width: 100%;
+                height: 200px;
+                align-self: stretch;
+            }
+
+            .list-item-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .list-item-meta {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .list-item-actions {
+                align-self: stretch;
+                justify-content: center;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .modal-container {
+                margin: 10px;
+                max-height: calc(100vh - 20px);
+            }
+
+            .modal-header, .modal-form {
+                padding-left: 20px;
+                padding-right: 20px;
+            }
+
+            .form-actions {
+                flex-direction: column-reverse;
+            }
+
+            .form-actions button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .products-header {
+                padding: 20px;
+            }
+
+            .header-title h2 {
+                font-size: 20px;
+            }
+
+            .controls-bar {
+                padding: 16px;
+            }
+
+            .search-input {
+                font-size: 14px;
+                padding: 12px 40px 12px 40px;
+            }
+
+            .product-card {
+                margin: 0 8px;
+            }
+
+            .product-actions {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .btn-secondary-sm, .btn-success-sm, .btn-warning-sm {
+                justify-content: center;
+            }
+
+            .image-gallery {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 8px;
+            }
+
+            .upload-area {
+                padding: 24px 16px;
+            }
+
+            .upload-icon {
+                font-size: 28px;
+            }
+
+            .upload-text p:first-child {
+                font-size: 14px;
+            }
+        }
+
+        /* Animation Keyframes */
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Accessibility Improvements */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Focus Indicators */
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid #8B4A87;
+            outline-offset: 2px;
+        }
+
+        /* Print Styles */
+        @media print {
+            .modal-overlay,
+            .product-actions,
+            .controls-bar,
+            .btn-primary-enhanced {
+                display: none !important;
+            }
+
+            .products-grid {
+                break-inside: avoid;
+            }
+
+            .product-card {
+                break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
         }
     </style>
 </div>
