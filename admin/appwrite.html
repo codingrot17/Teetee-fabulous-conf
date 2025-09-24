@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Appwrite Collections</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success { background: #dcfce7; color: #166534; }
+        .error { background: #fef2f2; color: #dc2626; }
+        .info { background: #dbeafe; color: #1d4ed8; }
+        button {
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 10px 5px;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        pre {
+            background: #f3f4f6;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Appwrite Collections Setup</h1>
+        <p>This tool will help you create the necessary collections for your TEETEE FABULOUS dashboard with proper permissions.</p>
+        
+        <div id="status"></div>
+        
+        <button onclick="setupCollections()" id="setupBtn">Setup Collections</button>
+        <button onclick="checkCollections()" id="checkBtn">Check Existing Collections</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import { Client, Databases, Permission, Role, ID } from 'https://cdn.skypack.dev/appwrite@13.0.0';
+
+        // Your Appwrite configuration
+        const APPWRITE_CONFIG = {
+            endpoint: 'https://cloud.appwrite.io/v1',
+            projectId: '68ca0f1c00035ab92fa8',
+            databaseId: '68cdb1dc00266358cd6b'
+        };
+
+        const client = new Client()
+            .setEndpoint(APPWRITE_CONFIG.endpoint)
+            .setProject(APPWRITE_CONFIG.projectId);
+
+        const databases = new Databases(client);
+
+        // Collection schemas
+        const collections = {
+            products: {
+                name: 'Products',
+                attributes: [
+                    { key: 'name', type: 'string', size: 255, required: true },
+                    { key: 'description', type: 'string', size: 1000, required: true },
+                    { key: 'price', type: 'integer', required: true },
+                    { key: 'category', type: 'string', size: 100, required: true },
+                    { key: 'status', type: 'string', size: 50, required: true, default: 'active' },
+                    { key: 'images', type: 'string', size: 2000, required: false, array: true }
+                ]
+            },
+            categories: {
+                name: 'Categories',
+                attributes: [
+                    { key: 'name', type: 'string', size: 100, required: true },
+                    { key: 'description', type: 'string', size: 500, required: false },
+                    { key: 'color', type: 'string', size: 10, required: false, default: '#8B4A87' },
+                    { key: 'display_order', type: 'integer', required: false, default: 0 },
+                    { key: 'status', type: 'string', size: 50, required: false, default: 'active' }
+                ]
+            },
+            site_content: {
+                name: 'Site Content',
+                attributes: [
+                    { key: 'section_name', type: 'string', size: 100, required: true },
+                    { key: 'content_type', type: 'string', size: 50, required: true, default: 'json' },
+                    { key: 'content_data', type: 'string', size: 10000, required: true },
+                    { key: 'updated_by', type: 'string', size: 100, required: false }
+                ]
+            },
+            orders: {
+                name: 'Orders',
+                attributes: [
+                    { key: 'customer_name', type: 'string', size: 200, required: true },
+                    { key: 'customer_email', type: 'string', size: 200, required: true },
+                    { key: 'customer_phone', type: 'string', size: 50, required: false },
+                    { key: 'service_type', type: 'string', size: 100, required: true },
+                    { key: 'message', type: 'string', size: 2000, required: true },
+                    { key: 'status', type: 'string', size: 50, required: true, default: 'pending' },
+                    { key: 'notes', type: 'string', size: 1000, required: false },
+                    { key: 'order_date', type: 'datetime', required: true }
+                ]
+            },
+            users: {
+                name: 'Users',
+                attributes: [
+                    { key: 'email', type: 'string', size: 200, required: true },
+                    { key: 'name', type: 'string', size: 200, required: true },
+                    { key: 'role', type: 'string', size: 50, required: true, default: 'admin' },
+                    { key: 'status', type: 'string', size: 50, required: true, default: 'active' },
+                    { key: 'last_login', type: 'datetime', required: false }
+                ]
+            },
+            settings: {
+                name: 'Settings',
+                attributes: [
+                    { key: 'setting_key', type: 'string', size: 100, required: true },
+                    { key: 'setting_value', type: 'string', size: 2000, required: true },
+                    { key: 'setting_type', type: 'string', size: 50, required: false, default: 'text' },
+                    { key: 'description', type: 'string', size: 500, required: false }
+                ]
+            }
+        };
+
+        window.checkCollections = async function() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            statusDiv.innerHTML = '<div class="info">Checking existing collections...</div>';
+            
+            try {
+                const database = await databases.get(APPWRITE_CONFIG.databaseId);
+                const existingCollections = await databases.listCollections(APPWRITE_CONFIG.databaseId);
+                
+                let results = '<h3>Current Collections:</h3>';
+                
+                if (existingCollections.total === 0) {
+                    results += '<p>No collections found. You need to create them.</p>';
+                } else {
+                    results += '<ul>';
+                    existingCollections.collections.forEach(col => {
+                        results += `<li><strong>${col.name}</strong> (${col.$id}) - ${col.attributes?.length || 0} attributes</li>`;
+                    });
+                    results += '</ul>';
+                }
+                
+                resultsDiv.innerHTML = results;
+                statusDiv.innerHTML = '<div class="success">Check completed!</div>';
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">Error checking collections: ${error.message}</div>`;
+                console.error('Check error:', error);
+            }
+        };
+
+        window.setupCollections = async function() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            const setupBtn = document.getElementById('setupBtn');
+            
+            setupBtn.disabled = true;
+            statusDiv.innerHTML = '<div class="info">Setting up collections...</div>';
+            
+            let results = '<h3>Setup Results:</h3>';
+            
+            try {
+                for (const [collectionId, schema] of Object.entries(collections)) {
+                    try {
+                        // Create collection with proper permissions
+                        const collection = await databases.createCollection(
+                            APPWRITE_CONFIG.databaseId,
+                            collectionId,
+                            schema.name,
+                            [
+                                Permission.read(Role.any()),
+                                Permission.create(Role.users()),
+                                Permission.update(Role.users()),
+                                Permission.delete(Role.users())
+                            ]
+                        );
+                        
+                        results += `<div class="success">✅ Created collection: ${schema.name}</div>`;
+                        
+                        // Add attributes
+                        for (const attr of schema.attributes) {
+                            try {
+                                if (attr.type === 'string') {
+                                    await databases.createStringAttribute(
+                                        APPWRITE_CONFIG.databaseId,
+                                        collectionId,
+                                        attr.key,
+                                        attr.size,
+                                        attr.required,
+                                        attr.default || null,
+                                        attr.array || false
+                                    );
+                                } else if (attr.type === 'integer') {
+                                    await databases.createIntegerAttribute(
+                                        APPWRITE_CONFIG.databaseId,
+                                        collectionId,
+                                        attr.key,
+                                        attr.required,
+                                        null,
+                                        null,
+                                        attr.default || null
+                                    );
+                                } else if (attr.type === 'datetime') {
+                                    await databases.createDatetimeAttribute(
+                                        APPWRITE_CONFIG.databaseId,
+                                        collectionId,
+                                        attr.key,
+                                        attr.required,
+                                        attr.default || null
+                                    );
+                                }
+                                
+                                results += `<div class="info">   Added attribute: ${attr.key}</div>`;
+                            } catch (attrError) {
+                                results += `<div class="error">   ⚠️ Attribute ${attr.key}: ${attrError.message}</div>`;
+                            }
+                        }
+                        
+                    } catch (collectionError) {
+                        if (collectionError.code === 409) {
+                            results += `<div class="info">ℹ️ Collection ${schema.name} already exists</div>`;
+                        } else {
+                            results += `<div class="error">❌ Failed to create ${schema.name}: ${collectionError.message}</div>`;
+                        }
+                    }
+                }
+                
+                // Create default categories
+                try {
+                    const defaultCategories = [
+                        { name: 'Premium', description: 'High-quality cakes with premium ingredients', color: '#D4A574', display_order: 1 },
+                        { name: 'VIP', description: 'Luxury cakes with premium decorations', color: '#8B4A87', display_order: 2 },
+                        { name: 'Special', description: 'Limited edition and special occasion cakes', color: '#e74c3c', display_order: 3 }
+                    ];
+                    
+                    for (const category of defaultCategories) {
+                        try {
+                            await databases.createDocument(
+                                APPWRITE_CONFIG.databaseId,
+                                'categories',
+                                ID.unique(),
+                                category
+                            );
+                            results += `<div class="success">✅ Created category: ${category.name}</div>`;
+                        } catch (catError) {
+                            results += `<div class="error">⚠️ Category ${category.name}: ${catError.message}</div>`;
+                        }
+                    }
+                } catch (error) {
+                    results += `<div class="error">Error creating default categories: ${error.message}</div>`;
+                }
+                
+                statusDiv.innerHTML = '<div class="success">Setup completed! You can now use your dashboard.</div>';
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">Setup failed: ${error.message}</div>`;
+                results += `<div class="error">❌ Setup failed: ${error.message}</div>`;
+            }
+            
+            resultsDiv.innerHTML = results;
+            setupBtn.disabled = false;
+        };
+    </script>
+</body>
+</html>

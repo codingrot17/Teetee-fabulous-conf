@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - TEETEE FABULOUS</title>
+    <link rel="icon" href="../asset/images/brand.png" type="image/png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Load Appwrite -->
+    <script type="module">
+        import { Client, Account, Databases, ID } from 'https://cdn.skypack.dev/appwrite@13.0.0';
+
+        // Appwrite configuration
+        const APPWRITE_CONFIG = {
+            endpoint: 'https://cloud.appwrite.io/v1', 
+            projectId: '68ca0f1c00035ab92fa8', 
+            databaseId: '68cdb1dc00266358cd6b',
+            collections: {
+                users: 'users'
+            }
+        };
+
+        // Initialize Appwrite
+        const client = new Client()
+            .setEndpoint(APPWRITE_CONFIG.endpoint)
+            .setProject(APPWRITE_CONFIG.projectId);
+
+        const account = new Account(client);
+        const databases = new Databases(client);
+
+        // Auth Service
+        class AuthService {
+            async login(email, password) {
+                try {
+                    // Create session
+                    const session = await account.createEmailSession(email, password);
+                    console.log('Session created:', session);
+                    
+                    // Get user details
+                    const user = await account.get();
+                    console.log('User details:', user);
+                    
+                    return { user, session };
+                } catch (error) {
+                    console.error('Login error:', error);
+                    throw new Error(`Login failed: ${error.message}`);
+                }
+            }
+
+            async getCurrentUser() {
+                try {
+                    const user = await account.get();
+                    return user;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            async logout() {
+                try {
+                    await account.deleteSession('current');
+                    return true;
+                } catch (error) {
+                    throw new Error(`Logout failed: ${error.message}`);
+                }
+            }
+
+            async checkAuthState() {
+                try {
+                    const user = await this.getCurrentUser();
+                    return { authenticated: !!user, user };
+                } catch (error) {
+                    return { authenticated: false, user: null };
+                }
+            }
+        }
+
+        // Initialize and expose services
+        const authService = new AuthService();
+        window.authService = authService;
+        window.APPWRITE_CONFIG = APPWRITE_CONFIG;
+        window.appwriteAccount = account;
+        window.appwriteDatabases = databases;
+        window.ID = ID;
+
+        // Check if already logged in
+        window.addEventListener('DOMContentLoaded', async () => {
+            const authState = await authService.checkAuthState();
+            if (authState.authenticated) {
+                console.log('User already logged in, redirecting to dashboard');
+                window.location.href = 'dashboard.html';
+            }
+        });
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .login-header {
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            padding: 40px 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .brand-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .brand-name {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .brand-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .login-form {
+            padding: 40px 30px;
+        }
+        
+        .form-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .form-subtitle {
+            color: #64748b;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+            position: relative;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #8B4A87;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+        }
+        
+        .form-input.error {
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+        
+        .input-icon {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+        }
+        
+        .error-message {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid #fecaca;
+        }
+        
+        .login-button {
+            width: 100%;
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .login-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 74, 135, 0.3);
+        }
+        
+        .login-button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .forgot-password {
+            text-align: center;
+            margin-top: 24px;
+        }
+        
+        .forgot-password a {
+            color: #8B4A87;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+        
+        .forgot-password a:hover {
+            color: #D4A574;
+        }
+        
+        .demo-credentials {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .demo-title {
+            font-weight: 600;
+            color: #0369a1;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .demo-info {
+            font-size: 13px;
+            color: #0369a1;
+            line-height: 1.5;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 10px;
+            }
+            
+            .login-header {
+                padding: 30px 20px;
+            }
+            
+            .login-form {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container" x-data="adminLogin()">
+        <!-- Header -->
+        <div class="login-header">
+            <div class="brand-icon">🧁</div>
+            <div class="brand-name">TEETEE FABULOUS</div>
+            <div class="brand-subtitle">Admin Dashboard</div>
+        </div>
+        
+        <!-- Form -->
+        <div class="login-form">
+            <h2 class="form-title">Welcome Back</h2>
+            <p class="form-subtitle">Sign in to access your dashboard</p>
+            
+            <!-- Demo Credentials -->
+            <div class="demo-credentials">
+                <div class="demo-title">Demo Account</div>
+                <div class="demo-info">
+                    For testing, create an admin account first or use your existing credentials.
+                </div>
+            </div>
+            
+            <!-- Error Message -->
+            <div x-show="error" class="error-message" x-text="error"></div>
+            
+            <form @submit.prevent="handleLogin">
+                <div class="form-group">
+                    <label class="form-label" for="email">Email Address</label>
+                    <input 
+                        type="email" 
+                        id="email"
+                        class="form-input"
+                        :class="{ 'error': error }"
+                        x-model="email"
+                        placeholder="admin@teeteefabulous.com"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password"
+                        class="form-input"
+                        :class="{ 'error': error }"
+                        x-model="password"
+                        placeholder="Enter your password"
+                        required
+                    >
+                </div>
+                
+                <button 
+                    type="submit" 
+                    class="login-button"
+                    :disabled="loading"
+                >
+                    <div x-show="loading" class="loading-spinner"></div>
+                    <span x-text="loading ? 'Signing In...' : 'Sign In'"></span>
+                </button>
+            </form>
+            
+            <div class="forgot-password">
+                <a href="#" @click.prevent="showCreateAccount = true">Need to create an admin account?</a>
+            </div>
+        </div>
+        
+        <!-- Create Account Modal -->
+        <div 
+            x-show="showCreateAccount" 
+            style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;"
+            @click.self="showCreateAccount = false"
+            x-transition
+        >
+            <div style="background: white; border-radius: 12px; max-width: 400px; width: 100%; padding: 30px;">
+                <h3 style="font-size: 20px; margin-bottom: 20px; color: #1e293b;">Create Admin Account</h3>
+                
+                <form @submit.prevent="handleCreateAccount">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Full Name</label>
+                        <input 
+                            type="text" 
+                            x-model="createForm.name"
+                            style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                            placeholder="Your full name"
+                            required
+                        >
+                    </div>
+                    
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Email</label>
+                        <input 
+                            type="email" 
+                            x-model="createForm.email"
+                            style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                            placeholder="admin@teeteefabulous.com"
+                            required
+                        >
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-weight: 500; color: #374151; margin-bottom: 6px; font-size: 14px;">Password</label>
+                        <input 
+                            type="password" 
+                            x-model="createForm.password"
+                            style="width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                            placeholder="Minimum 8 characters"
+                            required
+                            minlength="8"
+                        >
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button 
+                            type="button"
+                            @click="showCreateAccount = false"
+                            style="flex: 1; padding: 12px 16px; border: 1px solid #e2e8f0; background: white; color: #374151; border-radius: 8px; cursor: pointer;"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit"
+                            :disabled="creating"
+                            style="flex: 1; padding: 12px 16px; background: linear-gradient(135deg, #8B4A87, #D4A574); color: white; border: none; border-radius: 8px; cursor: pointer;"
+                        >
+                            <span x-text="creating ? 'Creating...' : 'Create Account'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        function adminLogin() {
+            return {
+                email: '',
+                password: '',
+                loading: false,
+                error: '',
+                showCreateAccount: false,
+                creating: false,
+                createForm: {
+                    name: '',
+                    email: '',
+                    password: ''
+                },
+
+                async handleLogin() {
+                    this.loading = true;
+                    this.error = '';
+
+                    try {
+                        if (!window.authService) {
+                            throw new Error('Authentication service not available');
+                        }
+
+                        const result = await window.authService.login(this.email, this.password);
+                        console.log('Login successful:', result);
+                        
+                        // Redirect to dashboard
+                        window.location.href = 'dashboard.html';
+                        
+                    } catch (error) {
+                        console.error('Login failed:', error);
+                        this.error = error.message || 'Login failed. Please try again.';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async handleCreateAccount() {
+                    this.creating = true;
+                    this.error = '';
+
+                    try {
+                        if (!window.appwriteAccount) {
+                            throw new Error('Appwrite account service not available');
+                        }
+
+                        // Create account using Appwrite
+                        const newUser = await window.appwriteAccount.create(
+                            window.ID?.unique() || 'unique()',
+                            this.createForm.email,
+                            this.createForm.password,
+                            this.createForm.name
+                        );
+
+                        console.log('Account created:', newUser);
+
+                        // Auto-login after account creation
+                        await window.authService.login(this.createForm.email, this.createForm.password);
+                        
+                        console.log('Account created and logged in successfully');
+                        
+                        // Redirect to dashboard
+                        window.location.href = 'dashboard.html';
+                        
+                    } catch (error) {
+                        console.error('Account creation failed:', error);
+                        this.error = error.message || 'Account creation failed. Please try again.';
+                    } finally {
+                        this.creating = false;
+                        this.showCreateAccount = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

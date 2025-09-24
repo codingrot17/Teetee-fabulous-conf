@@ -14,7 +14,7 @@ const APPWRITE_CONFIG = {
         users: 'users',
         settings: 'settings'
     },
-    bucketId: 'cake-images'
+    bucketId: '68cdb9ef003cf2887d53'
 };
 
 // Initialize Appwrite
@@ -103,7 +103,7 @@ class AuthService {
                     name,
                     role: 'admin',
                     status: 'active',
-                    created_at: new Date().toISOString()
+                    $createdAt: new Date().toISOString()
                 },
                 [
                     Permission.read(Role.user(user.$id)),
@@ -176,7 +176,7 @@ class DatabaseService {
 
     async getProducts(filters = {}) {
         try {
-            const queries = [Query.orderDesc('created_at')];
+            const queries = [Query.orderDesc('$createdAt')];
             
             if (filters.category) {
                 queries.push(Query.equal('category', filters.category));
@@ -236,7 +236,7 @@ class DatabaseService {
                     category: updateData.category,
                     status: updateData.status,
                     images: allImages,
-                    updated_at: new Date().toISOString()
+                    $updatedAt: new Date().toISOString()
                 }
             );
 
@@ -295,7 +295,7 @@ class DatabaseService {
                 section_name: section,
                 content_type: 'json',
                 content_data: JSON.stringify(contentData),
-                updated_at: new Date().toISOString(),
+                $updatedAt: new Date().toISOString(),
                 updated_by: user?.$id || 'unknown'
             };
 
@@ -357,7 +357,7 @@ class DatabaseService {
                     color: categoryData.color || '#8B4A87',
                     display_order: categoryData.display_order || 0,
                     status: categoryData.status || 'active',
-                    created_at: new Date().toISOString()
+                    $createdAt: new Date().toISOString()
                 },
                 [
                     Permission.read(Role.any()),
@@ -398,7 +398,7 @@ class DatabaseService {
                     status: 'pending',
                     notes: '',
                     order_date: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    $updatedAt: new Date().toISOString()
                 },
                 [
                     Permission.read(Role.user('admin')),
@@ -441,7 +441,7 @@ class DatabaseService {
                 {
                     status,
                     notes,
-                    updated_at: new Date().toISOString()
+                    $updatedAt: new Date().toISOString()
                 }
             );
         } catch (error) {
@@ -498,7 +498,7 @@ class DatabaseService {
                 setting_value: value,
                 setting_type: type,
                 description: description,
-                updated_at: new Date().toISOString()
+                $updatedAt: new Date().toISOString()
             };
 
             if (existing.documents.length > 0) {
