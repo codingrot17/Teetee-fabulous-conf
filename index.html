@@ -4,30 +4,136 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TEETEE FABULOUS CONFECTIONARY INT'L - Premium Cakes & Confectionery</title>
-    <meta name="description" content="Order amazing premium cakes from TEETEE FABULOUS CONFECTIONARY. Specializing in vanilla, chocolate, and red velvet cakes with fast delivery and great discounts.">
+    <meta name="description" content="Order amazing premium cakes from TEETEE FABULOUS. Specializing in vanilla, chocolate, and red velvet cakes with fast delivery and great discounts.">
     
     <!-- Favicon -->
     <link rel="icon" href="asset/images/brand.png" type="image/png">
     
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="stylesheet" href="css/query.css">
     
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.16/typed.umd.js"></script>
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- Typed.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.16/typed.umd.js"></script>
+
+    <!-- Appwrite SDK -->
+    <script type="module">
+        import { Client, Databases, Query } from 'https://cdn.skypack.dev/appwrite@13.0.0';
+
+        const APPWRITE_CONFIG = {
+            endpoint: 'https://cloud.appwrite.io/v1', 
+            projectId: '68ca0f1c00035ab92fa8', 
+            databaseId: '68cdb1dc00266358cd6b',
+            collections: {
+                products: 'products',
+                categories: 'categories'
+            },
+            bucketId: '68cdb9ef003cf2887d53'
+        };
+
+        const client = new Client()
+            .setEndpoint(APPWRITE_CONFIG.endpoint)
+            .setProject(APPWRITE_CONFIG.projectId);
+
+        const databases = new Databases(client);
+
+        class ProductService {
+            async getProducts(filters = {}) {
+                try {
+                    const queries = [
+                        Query.equal('status', 'active'),
+                        Query.orderDesc('$createdAt')
+                    ];
+                    
+                    if (filters.category) {
+                        queries.push(Query.equal('category', filters.category));
+                    }
+                    if (filters.limit) {
+                        queries.push(Query.limit(filters.limit));
+                    }
+
+                    const products = await databases.listDocuments(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.collections.products,
+                        queries
+                    );
+
+                    products.documents = products.documents.map(product => ({
+                        ...product,
+                        imageUrls: product.images?.map(imageId => this.getImageUrl(imageId)) || []
+                    }));
+
+                    return products;
+                } catch (error) {
+                    console.error('Error fetching products:', error);
+                    return { documents: [], total: 0 };
+                }
+            }
+
+            async getCategories() {
+                try {
+                    return await databases.listDocuments(
+                        APPWRITE_CONFIG.databaseId,
+                        APPWRITE_CONFIG.collections.categories,
+                        [Query.equal('status', 'active'), Query.orderAsc('display_order')]
+                    );
+                } catch (error) {
+                    console.error('Error fetching categories:', error);
+                    return { documents: [], total: 0 };
+                }
+            }
+
+            getImageUrl(fileId) {
+                if (!fileId) return 'https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=No+Image';
+                return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/view?project=${APPWRITE_CONFIG.projectId}`;
+            }
+
+            formatPrice(price) {
+                return new Intl.NumberFormat('en-NG', {
+                    style: 'currency',
+                    currency: 'NGN',
+                    minimumFractionDigits: 0
+                }).format(price);
+            }
+        }
+
+        window.productService = new ProductService();
+        window.APPWRITE_CONFIG = APPWRITE_CONFIG;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await window.loadDynamicProducts();
+        });
+    </script>
 </head>
 <body>
+    <!-- Preloader -->
+    <div id="preloader">
+        <div class="preloader-content">
+            <div class="logo-animation">
+                <img src="asset/images/brand.png" alt="TEETEE FABULOUS">
+                <div class="loading-text">TEETEE FABULOUS</div>
+            </div>
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scroll Up Button -->
-    <div class="scroll-up-btn">
+    <div class="scroll-up-btn" id="scrollUpBtn">
         <i class="fas fa-angle-up"></i>
     </div>
 
     <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar" id="navbar">
         <div class="max-width">
             <div class="logo">
                 <a href="#home">
@@ -35,14 +141,20 @@
                     <span>TEETEE FABULOUS</span>
                 </a>
             </div>
-            <ul class="menu">
-                <li><a href="#home" class="menu-btn">Home</a></li>
-                <li><a href="#about" class="menu-btn">About</a></li>
-                <li><a href="#products" class="menu-btn">Our Cakes</a></li>
-                <li><a href="#skills" class="menu-btn">Skills</a></li>
-                <li><a href="#contact" class="menu-btn">Contact</a></li>
+            <ul class="menu" id="navMenu">
+                <li><a href="#home" class="menu-link">Home</a></li>
+                <li><a href="#about" class="menu-link">About</a></li>
+                <li><a href="#products" class="menu-link">Our Cakes</a></li>
+                <li><a href="#skills" class="menu-link">Skills</a></li>
+                <li><a href="#contact" class="menu-link">Contact</a></li>
+                <li class="cart-item">
+                    <a href="#" class="cart-link" id="cartLink">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-counter" id="cartCounter">0</span>
+                    </a>
+                </li>
             </ul>
-            <div class="menu-btn">
+            <div class="menu-btn" id="menuBtn">
                 <i class="fas fa-bars"></i>
             </div>
         </div>
@@ -50,13 +162,43 @@
 
     <!-- Hero Section -->
     <section class="home" id="home">
+        <div class="hero-overlay"></div>
         <div class="max-width">
             <div class="home-content">
-                <div class="text-1">Your Dream Cake Unfolds<br> Before Your Eyes</div>
-                <div class="text-2">Order Amazing Cakes<br> From The Best Price</div>
-                <div class="text-3">Enjoy Fast Free Delivery<br> <span>And Great Discounts!</span></div>
-                <a href="#contact" class="cta-btn">Book Now!</a>
+                <div class="text-1 fade-in-up">Your Dream Cake Unfolds<br> Before Your Eyes</div>
+                <div class="text-2 fade-in-up delay-1">Order Amazing Cakes<br> From The Best Price</div>
+                <div class="text-3 fade-in-up delay-2">Enjoy Fast Free Delivery<br> <span>And Great Discounts!</span></div>
+                <div class="cta-buttons fade-in-up delay-3">
+                    <a href="#products" class="cta-btn primary">
+                        <i class="fas fa-birthday-cake"></i>
+                        View Our Cakes
+                    </a>
+                    <a href="#contact" class="cta-btn secondary">
+                        <i class="fas fa-phone"></i>
+                        Order Now
+                    </a>
+                </div>
+                <div class="hero-features fade-in-up delay-4">
+                    <div class="feature-item">
+                        <i class="fas fa-shipping-fast"></i>
+                        <span>Fast Delivery</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-award"></i>
+                        <span>Premium Quality</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-palette"></i>
+                        <span>Custom Designs</span>
+                    </div>
+                </div>
             </div>
+        </div>
+        <div class="hero-scroll-indicator">
+            <div class="scroll-mouse">
+                <div class="scroll-wheel"></div>
+            </div>
+            <span>Scroll to explore</span>
         </div>
     </section>
 
@@ -66,33 +208,46 @@
             <h2 class="title">About Us</h2>
             <div class="about-content">
                 <div class="column left">
-                    <img src="asset/images/about.JPG" alt="About TEETEE FABULOUS Confectionary">
+                    <div class="image-container">
+                        <img src="asset/images/about.JPG" alt="About TEETEE FABULOUS">
+                        <div class="experience-badge">
+                            <div class="badge-number">5+</div>
+                            <div class="badge-text">Years<br>Experience</div>
+                        </div>
+                    </div>
                 </div>
                 <div class="column right">
                     <div class="text">We are TEETEE FABULOUS <br/> <span class="typing"></span></div>
                     
                     <div class="mission-section">
-                        <h3>Our Mission</h3>
-                        <p>TEETEE FABULOUS inspires and innovates with a unique & wide range of Cakes. This allows us to accommodate consumer wishes and expectations through high-quality products with authentic flavours, appearances and taste sensations. Challenging and stimulating the product category on a daily basis creates growth for our partners.</p>
+                        <h3><i class="fas fa-bullseye"></i>Our Mission</h3>
+                        <p>TEETEE FABULOUS inspires and innovates with a unique & wide range of Cakes. This allows us to accommodate consumer wishes and expectations through high-quality products with authentic flavours, appearances and taste sensations.</p>
                     </div>
 
                     <div class="vision-section">
-                        <h3>Our Vision</h3>
-                        <p>To build a leading international company passionate about Cakes with the drive to grow and develop the confectionery market, through our longstanding expertise (historical, traditional), innovation and empowered talent.</p>
+                        <h3><i class="fas fa-eye"></i>Our Vision</h3>
+                        <p>To build a leading international company passionate about Cakes with the drive to grow and develop the confectionery market, through our longstanding expertise, innovation and empowered talent.</p>
                     </div>
 
-                    <div class="values-section">
-                        <h3>Our Values</h3>
-                        <ul class="values-list">
-                            <li><strong>Entrepreneurship</strong> – We are proactive and seek out opportunities for innovation</li>
-                            <li><strong>No-nonsense</strong> – We work efficiently thanks to our open, direct communication</li>
-                            <li><strong>Respect</strong> – We respect one another, our products and the planet</li>
-                            <li><strong>Ownership</strong> – We don't shirk our responsibilities and look after the organization's interests</li>
-                            <li><strong>Passion</strong> – We are enthusiastic, proud and continuously strive for top quality</li>
-                        </ul>
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="500">0</div>
+                            <div class="stat-label">Happy Customers</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="1000">0</div>
+                            <div class="stat-label">Cakes Delivered</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" data-count="50">0</div>
+                            <div class="stat-label">Cake Varieties</div>
+                        </div>
                     </div>
                     
-                    <a href="#contact" class="read-more-btn">Contact Us</a>
+                    <a href="#contact" class="read-more-btn">
+                        <i class="fas fa-arrow-right"></i>
+                        Contact Us
+                    </a>
                 </div>
             </div>
         </div>
@@ -102,232 +257,55 @@
     <section class="products" id="products">
         <div class="max-width">
             <h2 class="title black">Our Premium Cakes</h2>
-            <div class="products-content">
-                <!-- Cake Category Filters -->
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">All Cakes</button>
-                    <button class="filter-btn" data-filter="premium">Premium Collection</button>
-                    <button class="filter-btn" data-filter="vip">VIP Collection</button>
-                    <button class="filter-btn" data-filter="special">Special Collection</button>
+            
+            <!-- Search and Filter -->
+            <div class="products-controls">
+                <div class="search-container">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="productSearch" placeholder="Search for your favorite cakes..." autocomplete="off">
+                        <button type="button" class="search-clear" id="searchClear">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                 </div>
-
-                <!-- Product Grid -->
-                <div class="product-grid">
-                    <!-- Premium Collection -->
-                    <div class="product-card" data-category="premium">
-                        <div class="product-image">
-                            <img src="asset/images/371517469_250682164015994_584808394413513814_n.jpg" alt="Premium Vanilla Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="vanilla-premium">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="vanilla-premium">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge premium">Premium</div>
-                            <h3 class="product-title">Premium Vanilla Cake</h3>
-                            <p class="product-description">Rich vanilla sponge with premium cream frosting</p>
-                            <div class="product-price">₦15,000</div>
-                            <button class="buy-now-btn" data-product="vanilla-premium">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="premium">
-                        <div class="product-image">
-                            <img src="371487039_1860714594325853_6664745300114538107_n.jpg" alt="Premium Red Velvet Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="redvelvet-premium">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="redvelvet-premium">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge premium">Premium</div>
-                            <h3 class="product-title">Premium Red Velvet Cake</h3>
-                            <p class="product-description">Classic red velvet with cream cheese frosting</p>
-                            <div class="product-price">₦18,000</div>
-                            <button class="buy-now-btn" data-product="redvelvet-premium">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="premium">
-                        <div class="product-image">
-                            <img src="371933040_659833406097347_860156362010642307_n.jpg" alt="Premium Chocolate Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="chocolate-premium">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="chocolate-premium">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge premium">Premium</div>
-                            <h3 class="product-title">Premium Chocolate Cake</h3>
-                            <p class="product-description">Decadent chocolate layers with rich ganache</p>
-                            <div class="product-price">₦20,000</div>
-                            <button class="buy-now-btn" data-product="chocolate-premium">Order Now</button>
-                        </div>
-                    </div>
-
-                    <!-- VIP Collection -->
-                    <div class="product-card" data-category="vip">
-                        <div class="product-image">
-                            <img src="372028248_3148490912121071_5514157839758438299_n.jpg" alt="VIP Vanilla Deluxe Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="vanilla-vip">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="vanilla-vip">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge vip">VIP</div>
-                            <h3 class="product-title">VIP Vanilla Deluxe</h3>
-                            <p class="product-description">Ultimate vanilla experience with gold accents</p>
-                            <div class="product-price">₦25,000</div>
-                            <button class="buy-now-btn" data-product="vanilla-vip">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="vip">
-                        <div class="product-image">
-                            <img src="372162797_256935263918117_5527198269291206489_n.jpg" alt="VIP Chocolate Supreme Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="chocolate-vip">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="chocolate-vip">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge vip">VIP</div>
-                            <h3 class="product-title">VIP Chocolate Supreme</h3>
-                            <p class="product-description">Luxurious chocolate masterpiece</p>
-                            <div class="product-price">₦28,000</div>
-                            <button class="buy-now-btn" data-product="chocolate-vip">Order Now</button>
-                        </div>
-                    </div>
-
-                    <!-- Special Collection -->
-                    <div class="product-card" data-category="special">
-                        <div class="product-image">
-                            <img src="371857224_827350812329688_2697409711199437411_n.jpg" alt="Special Red Velvet Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="redvelvet-special">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="redvelvet-special">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge special">Special</div>
-                            <h3 class="product-title">Special Red Velvet</h3>
-                            <p class="product-description">Artisan red velvet with unique decorations</p>
-                            <div class="product-price">₦22,000</div>
-                            <button class="buy-now-btn" data-product="redvelvet-special">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="special">
-                        <div class="product-image">
-                            <img src="372382802_960825884999122_743632667082702059_n.jpg" alt="Special Edition Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="special-edition">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="special-edition">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge special">Special</div>
-                            <h3 class="product-title">Special Edition Cake</h3>
-                            <p class="product-description">Limited edition designer cake</p>
-                            <div class="product-price">₦30,000</div>
-                            <button class="buy-now-btn" data-product="special-edition">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="special">
-                        <div class="product-image">
-                            <img src="postImg1.jpg" alt="Special Chocolate Creation">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="chocolate-special">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="chocolate-special">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge special">Special</div>
-                            <h3 class="product-title">Special Chocolate Creation</h3>
-                            <p class="product-description">Handcrafted chocolate artistry</p>
-                            <div class="product-price">₦24,000</div>
-                            <button class="buy-now-btn" data-product="chocolate-special">Order Now</button>
-                        </div>
-                    </div>
-
-                    <div class="product-card" data-category="premium">
-                        <div class="product-image">
-                            <img src="cake2.jpg" alt="Premium Custom Cake">
-                            <div class="product-overlay">
-                                <div class="overlay-buttons">
-                                    <button class="quick-view-btn" data-product="custom-premium">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="add-to-cart-btn" data-product="custom-premium">
-                                        <i class="fas fa-shopping-cart"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="product-info">
-                            <div class="product-badge premium">Premium</div>
-                            <h3 class="product-title">Custom Premium Cake</h3>
-                            <p class="product-description">Personalized design to your specification</p>
-                            <div class="product-price">₦16,500</div>
-                            <button class="buy-now-btn" data-product="custom-premium">Order Now</button>
-                        </div>
+                
+                <div class="filter-container">
+                    <div class="filter-buttons" id="categoryFilters">
+                        <button class="filter-btn active" data-filter="all">All Cakes</button>
                     </div>
                 </div>
             </div>
+
+            <!-- Products Grid -->
+            <div class="products-content">
+                <div class="product-grid" id="productsGrid">
+                    <div class="products-loading" id="productsLoading">
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                        </div>
+                        <p>Loading our delicious cakes...</p>
+                    </div>
+                </div>
+
+                <div class="no-results" id="noResults">
+                    <div class="no-results-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3>No cakes found</h3>
+                    <p>Try adjusting your search or filter to find what you're looking for.</p>
+                    <button class="btn-clear-filters" id="clearFilters">
+                        <i class="fas fa-undo"></i>
+                        Clear Filters
+                    </button>
+                </div>
+            </div>
             
-            <!-- View All Button -->
             <div class="view-all-section">
-                <a href="#contact" class="view-all-btn">Contact Us for Custom Orders</a>
+                <a href="#contact" class="view-all-btn">
+                    <i class="fas fa-comments"></i>
+                    Contact Us for Custom Orders
+                </a>
             </div>
         </div>
     </section>
@@ -340,6 +318,7 @@
                 <div class="column left">
                     <div class="text">Our creative skills & experiences.</div>
                     <p>We have mastered the art of confectionery through years of dedicated practice and continuous learning. Our team combines traditional baking techniques with modern innovation to create extraordinary cakes that exceed expectations.</p>
+                    
                     <div class="expertise-highlights">
                         <div class="highlight-item">
                             <i class="fas fa-award"></i>
@@ -353,8 +332,16 @@
                             <i class="fas fa-birthday-cake"></i>
                             <span>1000+ Cakes Delivered</span>
                         </div>
+                        <div class="highlight-item">
+                            <i class="fas fa-palette"></i>
+                            <span>Custom Designs Available</span>
+                        </div>
                     </div>
-                    <a href="#contact" class="contact-btn">Get Custom Quote</a>
+                    
+                    <a href="#contact" class="contact-btn">
+                        <i class="fas fa-calculator"></i>
+                        Get Custom Quote
+                    </a>
                 </div>
                 <div class="column right">
                     <div class="bars">
@@ -362,35 +349,35 @@
                             <span>Creativity with Flavor and Texture</span>
                             <span>95%</span>
                         </div>
-                        <div class="line creativity"></div>
+                        <div class="line" data-progress="95"></div>
                     </div>
                     <div class="bars">
                         <div class="info">
                             <span>Advanced Baking Skills</span>
                             <span>90%</span>
                         </div>
-                        <div class="line baking"></div>
+                        <div class="line" data-progress="90"></div>
                     </div>
                     <div class="bars">
                         <div class="info">
                             <span>Patience Under Pressure</span>
                             <span>85%</span>
                         </div>
-                        <div class="line patience"></div>
+                        <div class="line" data-progress="85"></div>
                     </div>
                     <div class="bars">
                         <div class="info">
                             <span>Attention to Detail</span>
                             <span>98%</span>
                         </div>
-                        <div class="line detail"></div>
+                        <div class="line" data-progress="98"></div>
                     </div>
                     <div class="bars">
                         <div class="info">
                             <span>Customer Service</span>
                             <span>92%</span>
                         </div>
-                        <div class="line service"></div>
+                        <div class="line" data-progress="92"></div>
                     </div>
                 </div>
             </div>
@@ -443,27 +430,37 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="social-connect">
+                        <h4>Connect With Us</h4>
+                        <div class="social-links">
+                            <a href="#" class="social-link facebook"><i class="fab fa-facebook-f"></i></a>
+                            <a href="#" class="social-link instagram"><i class="fab fa-instagram"></i></a>
+                            <a href="#" class="social-link whatsapp"><i class="fab fa-whatsapp"></i></a>
+                            <a href="#" class="social-link twitter"><i class="fab fa-twitter"></i></a>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="column right">
-                    <div class="text" style="color: #5a6c7d;">Send us a Message</div>
-                    <form action="#" class="contact-form">
+                    <div class="text">Send us a Message</div>
+                    <form class="contact-form" id="contactForm">
                         <div class="form-fields">
                             <div class="field name">
-                                <input type="text" placeholder="Your Name" required>
+                                <input type="text" placeholder="Your Name" required id="contactName">
                                 <label>Name</label>
                             </div>
                             <div class="field email">
-                                <input type="email" placeholder="Your Email" required>
+                                <input type="email" placeholder="Your Email" required id="contactEmail">
                                 <label>Email</label>
                             </div>
                         </div>
                         <div class="field phone">
-                            <input type="tel" placeholder="Your Phone Number" required>
+                            <input type="tel" placeholder="Your Phone Number" required id="contactPhone">
                             <label>Phone</label>
                         </div>
                         <div class="field subject">
-                            <select required>
+                            <select required id="contactService">
                                 <option value="">Select Service</option>
                                 <option value="cake-order">Cake Order</option>
                                 <option value="custom-design">Custom Design</option>
@@ -474,11 +471,11 @@
                             <label>Service</label>
                         </div>
                         <div class="field message">
-                            <textarea cols="30" rows="6" placeholder="Tell us about your cake requirements..." required></textarea>
+                            <textarea cols="30" rows="6" placeholder="Tell us about your cake requirements..." required id="contactMessage"></textarea>
                             <label>Message</label>
                         </div>
                         <div class="form-button">
-                            <button type="submit">
+                            <button type="submit" id="submitBtn">
                                 <i class="fas fa-paper-plane"></i>
                                 Send Message
                             </button>
@@ -489,13 +486,34 @@
         </div>
     </section>
 
+    <!-- Newsletter Section -->
+    <section class="newsletter">
+        <div class="max-width">
+            <div class="newsletter-content">
+                <div class="newsletter-text">
+                    <h3>Stay Updated with Our Latest Creations</h3>
+                    <p>Subscribe to our newsletter and be the first to know about new cake designs, special offers, and exclusive discounts!</p>
+                </div>
+                <form class="newsletter-form" id="newsletterForm">
+                    <div class="newsletter-input-group">
+                        <input type="email" id="newsletterEmail" placeholder="Enter your email address" required>
+                        <button type="submit">
+                            <i class="fas fa-paper-plane"></i>
+                            Subscribe
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
     <!-- Footer -->
     <footer>
         <div class="max-width">
             <div class="footer-content">
                 <div class="footer-section">
                     <h3>TEETEE FABULOUS</h3>
-                    <p>Creating memorable moments with our delicious cakes and exceptional service.</p>
+                    <p>Creating memorable moments with our delicious cakes and exceptional service. Every cake tells a story, and we're here to help you tell yours.</p>
                     <div class="social-links">
                         <a href="#"><i class="fab fa-facebook-f"></i></a>
                         <a href="#"><i class="fab fa-instagram"></i></a>
@@ -533,6 +551,73 @@
             </div>
         </div>
     </footer>
+
+    <!-- Cart Sidebar -->
+    <div class="cart-overlay" id="cartOverlay"></div>
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h3><i class="fas fa-shopping-cart"></i> Shopping Cart</h3>
+            <button class="cart-close" id="cartCloseBtn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="cart-items" id="cartItemsList">
+            <div class="empty-cart">
+                <i class="fas fa-shopping-cart"></i>
+                <h4>Your cart is empty</h4>
+                <p>Add some delicious cakes to get started!</p>
+            </div>
+        </div>
+        <div class="cart-footer" id="cartFooter" style="display: none;">
+            <div class="cart-subtotal">
+                <span>Subtotal:</span>
+                <span id="cartSubtotal">₦0</span>
+            </div>
+            <div class="cart-total">
+                <span>Total:</span>
+                <span class="cart-total-amount" id="cartTotal">₦0</span>
+            </div>
+            <button class="checkout-btn" id="checkoutBtn">
+                <i class="fas fa-check-circle"></i>
+                Proceed to Checkout
+            </button>
+        </div>
+    </div>
+
+    <!-- Product Modal -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 id="modalTitle">Product Details</h3>
+                <button class="modal-close" id="modalClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-image">
+                    <img id="modalImage" src="" alt="">
+                    <div class="modal-category-badge" id="modalCategory"></div>
+                </div>
+                <div class="modal-content">
+                    <div class="modal-price" id="modalPrice"></div>
+                    <div class="modal-description" id="modalDescription"></div>
+                    <div class="modal-actions">
+                        <button class="btn-primary" id="modalOrderBtn">
+                            <i class="fas fa-shopping-cart"></i>
+                            Order Now
+                        </button>
+                        <button class="btn-secondary" id="modalAddCartBtn">
+                            <i class="fas fa-cart-plus"></i>
+                            Add to Cart
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
 
     <!-- JavaScript -->
     <script src="js/script.js"></script>

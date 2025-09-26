@@ -1,313 +1,862 @@
-$(document).ready(function(){
+// ===== CART MANAGEMENT (In-Memory Only) =====
+function initializeCart() {
+    updateCartCounter();
+    updateCartDisplay();
     
-    // Navbar scroll effect
-    $(window).scroll(function(){
-        if(this.scrollY > 20){
-            $('.navbar').addClass("sticky");
-        } else {
-            $('.navbar').removeClass("sticky");
-        }
-        
-        // Scroll up button visibility
-        if(this.scrollY > 500){
-            $('.scroll-up-btn').addClass("show");
-        } else {
-            $('.scroll-up-btn').removeClass("show");
-        }
+    // Cart icon click
+    $('#cartLink').click(function(e) {
+        e.preventDefault();
+        toggleCart();
     });
-
-    // Smooth scroll to top
-    $('.scroll-up-btn').click(function(){
-        $('html, body').animate({scrollTop: 0}, 800);
+    
+    // Close cart
+    $('#cartCloseBtn, #cartOverlay').click(function() {
+        closeCart();
     });
+    
+    // Checkout button
+    $('#checkoutBtn').click(function() {
+        checkout();
+    });
+    
+    // Cart item controls (delegated events)
+    $('#cartItemsList').on('click', '.quantity-btn', function() {
+        const productId = $(this).data('product');
+        const action = $(this).data('action');
+        updateQuantity(productId, action);
+    });
+    
+    $('#cartItemsList').on('click', '.remove-item-btn', function() {
+        const productId = $(this).data('product');
+        removeFromCart(productId);
+    });
+}
 
-    // Mobile menu toggle
-    $('.menu-btn').click(function(){
-        $('.navbar .menu').toggleClass("active");
-        $('.menu-btn i').toggleClass("active");
+function toggleCart() {
+    $('#cartSidebar').toggleClass('active');
+    $('#cartOverlay').toggleClass('active');
+    
+    if ($('#cartSidebar').hasClass('active')) {
+        $('body').css('overflow', 'hidden');
+    } else {
+        $('body').css('overflow', 'auto');
+    }
+}
+
+function closeCart() {
+    $('#cartSidebar').removeClass('active');
+    $('#cartOverlay').removeClass('active');
+    $('body').css('overflow', 'auto');
+}
+
+function addToCart(productId) {
+    const product = AppState.products.find(p => (p.$id || p.id) === productId);
+    if (!product) {
+        showNotification('Product not found', 'error');
+        return;
+    }
+
+    const existingItem = AppState.cart.find(item => item.id === productId);
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
+        showNotification(`Increased ${product.name} quantity to ${existingItem.quantity}`, 'success');
+    } else {
+        AppState.cart.push({
+            id: productId,
+            name: product.name,
+            price: product.price,
+            image: product.imageUrls?.[0] || 'https://via.placeholder.com/80x80',
+            category: product.category,
+            quantity: 1
+        });
+        showNotification(`${product.name} added to cart!`, 'success');
+    }
+    
+    updateCartCounter();
+    updateCartDisplay();
+}
+
+function removeFromCart(productId) {
+    const item = AppState.cart.find(item => item.id === productId);
+    const itemName = item ? item.name : 'Item';
+    
+    AppState.cart = AppState.cart.filter(item => item.id !== productId);
+    
+    updateCartCounter();
+    updateCartDisplay();
+    showNotification(`${itemName} removed from cart`, 'info');
+}
+
+function updateQuantity(productId, action) {
+    const item = AppState.cart.find(item => item.id === productId);
+    
+    if (!item) return;
+    
+    if (action === 'increase') {
+        item.quantity += 1;
+    } else if (action === 'decrease') {
+        item.quantity -= 1;
+        if (item.quantity <= 0) {
+            removeFromCart(productId);
+            return;
+        }
+    }
+    
+    updateCartCounter();
+    updateCartDisplay();
+}
+
+function updateCartCounter() {
+    const totalItems = AppState.cart.reduce((sum, item) => sum + item.quantity, 0);
+    const counter = $('#cartCounter');
+    
+    if (totalItems > 0) {
+        counter.text(totalItems).show();
+    } else {
+        counter.hide();
+    }
+}
+
+function updateCartDisplay() {
+    const cartItemsList = $('#cartItemsList');
+    const cartFooter = $('#cartFooter');
+    
+    if (AppState.cart.length === 0) {
+        cartItemsList.html(`
+            <div class="empty-cart">
+                <i class="fas fa-shopping-cart"></i>
+                <h4>Your cart is empty</h4>
+                <p>Add some delicious cakes to get started!</p>
+            </div>
+        `);
+        cartFooter.hide();
+        return;
+    }
+    
+    cartFooter.show();
+    
+    let cartHTML = '';
+    AppState.cart.forEach(item => {
+        const price = window.productService ? 
+            window.productService.formatPrice(item.price) : 
+            `₦${item.price.toLocaleString()}`;
         
-        // Prevent body scroll when menu is open
-        if($('.navbar .menu').hasClass('active')) {
+        const itemTotal = window.productService ? 
+            window.productService.formatPrice(item.price * item.quantity) : 
+            `₦${(item.price * item.quantity).toLocaleString()}`;
+        
+        cartHTML += `
+            <div class="cart-item" data-product-id="${item.id}">
+                <div class="cart-item-image">
+                    <img src="${item.image}" alt="${item.name}">
+                </div>
+                <div class="cart-item-details">
+                    <div class="cart-item-title">${item.name}</div>
+                    <div class="cart-item-category">${item.category}</div>
+                    <div class="cart-item-price">${price} × ${item.quantity}</div>
+                    <div class="cart-item-controls">
+                        <button class="quantity-btn" data-product="${item.id}" data-action="decrease">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <span class="quantity-display">${item.quantity}</span>
+                        <button class="quantity-btn" data-product="${item.id}" data-action="increase">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="remove-item-btn" data-product="${item.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    cartItemsList.html(cartHTML);
+    
+    // Update totals
+    const total = getCartTotal();
+    const formattedTotal = window.productService ? 
+        window.productService.formatPrice(total) : 
+        `₦${total.toLocaleString()}`;
+    
+    $('#cartSubtotal').text(formattedTotal);
+    $('#cartTotal').text(formattedTotal);
+}
+
+function getCartTotal() {
+    return AppState.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+}
+
+function checkout() {
+    if (AppState.cart.length === 0) {
+        showNotification('Your cart is empty', 'error');
+        return;
+    }
+    
+    closeCart();
+    
+    // Scroll to contact form
+    $('html, body').animate({
+        scrollTop: $('#contact').offset().top - 80
+    }, 1000, 'swing');
+    
+    setTimeout(() => {
+        const total = getCartTotal();
+        const formattedTotal = window.productService ? 
+            window.productService.formatPrice(total) : 
+            `₦${total.toLocaleString()}`;
+        
+        let orderDetails = 'I would like to order the following items:\n\n';
+        AppState.cart.forEach((item, index) => {
+            const itemPrice = window.productService ? 
+                window.productService.formatPrice(item.price) : 
+                `₦${item.price.toLocaleString()}`;
+            orderDetails += `${index + 1}. ${item.name} - ${itemPrice} × ${item.quantity}\n`;
+        });
+        orderDetails += `\nTotal: ${formattedTotal}\n\nPlease contact me to complete this order.`;
+        
+        $('#contactService').val('cake-order');
+        $('#contactMessage').val(orderDetails);
+        
+        showNotification('Please fill out the contact form to complete your order.', 'info');
+    }, 1200);
+}
+
+function initiateOrder(productId) {
+    const product = AppState.products.find(p => (p.$id || p.id) === productId);
+    if (!product) {
+        showNotification('Product not found', 'error');
+        return;
+    }
+
+    addToCart(productId);
+    
+    $('html, body').animate({
+        scrollTop: $('#contact').offset().top - 80
+    }, 1000, 'swing');
+    
+    setTimeout(() => {
+        const price = window.productService ? 
+            window.productService.formatPrice(product.price) : 
+            `₦${product.price.toLocaleString()}`;
+            
+        $('#contactService').val('cake-order');
+        $('#contactMessage').val(
+            `I would like to order: ${product.name} - ${price}\n\nPlease contact me with more details.`
+        );
+        showNotification('Please fill out the contact form to complete your order.', 'info');
+    }, 1200);
+}/* Enhanced TEETEE FABULOUS JavaScript */
+
+// ===== STATE MANAGEMENT (No localStorage - using in-memory storage) =====
+const AppState = {
+    products: [],
+    filteredProducts: [],
+    categories: [],
+    cart: [],
+    currentFilter: 'all',
+    searchQuery: '',
+    currentProduct: null,
+    countersAnimated: false,
+    skillsAnimated: false
+};
+
+// ===== INITIALIZE ON DOM READY =====
+$(document).ready(function() {
+    initializeApp();
+});
+
+// ===== MAIN INITIALIZATION =====
+function initializeApp() {
+    initializePreloader();
+    initializeNavigation();
+    initializeScrollEffects();
+    initializeHero();
+    initializeProducts();
+    initializeAnimations();
+    initializeContactForm();
+    initializeNewsletter();
+    initializeModal();
+    initializeCart();
+    
+    console.log('✅ TEETEE FABULOUS initialized successfully!');
+}
+
+// ===== PRELOADER =====
+function initializePreloader() {
+    $(window).on('load', function() {
+        setTimeout(() => {
+            $('#preloader').addClass('fade-out');
+            setTimeout(() => {
+                $('#preloader').remove();
+            }, 500);
+        }, 1000);
+    });
+    
+    // Fallback
+    setTimeout(() => {
+        $('#preloader').addClass('fade-out');
+    }, 5000);
+}
+
+// ===== NAVIGATION =====
+function initializeNavigation() {
+    // Mobile menu toggle - FIXED
+    $('#menuBtn').click(function() {
+        const menu = $('#navMenu');
+        const icon = $(this).find('i');
+        
+        menu.toggleClass('active');
+        
+        // Toggle between bars and times icon
+        if (menu.hasClass('active')) {
+            icon.removeClass('fa-bars').addClass('fa-times active');
             $('body').css('overflow', 'hidden');
         } else {
+            icon.removeClass('fa-times active').addClass('fa-bars');
             $('body').css('overflow', 'auto');
         }
     });
 
-    // Close mobile menu when clicking on menu items
-    $('.navbar .menu li a').click(function(){
-        $('.navbar .menu').removeClass("active");
-        $('.menu-btn i').removeClass("active");
+    // Close menu on link click
+    $('.menu-link').click(function() {
+        $('#navMenu').removeClass('active');
+        $('#menuBtn i').removeClass('fa-times active').addClass('fa-bars');
         $('body').css('overflow', 'auto');
     });
 
-    // Typing animation for about section
-    var typed = new Typed(".typing", {
-        strings: [
-            "CONFECTIONARY INT'L", 
-            "CATERING SERVICES", 
-            "EVENT PLANNING", 
-            "CUSTOM CAKE DESIGNS",
-            "PREMIUM BAKERY"
-        ],
-        typeSpeed: 100,
-        backSpeed: 60,
-        backDelay: 1500,
-        loop: true
-    });
-
-    // Smooth scrolling for navigation links
-    $('.navbar .menu li a[href^="#"], .cta-btn[href^="#"], .view-all-btn[href^="#"], .read-more-btn[href^="#"], .contact-btn[href^="#"]').click(function(e) {
+    // Smooth scrolling
+    $('a[href^="#"]').on('click', function(e) {
+        const href = $(this).attr('href');
+        if (href === '#') return;
+        
         e.preventDefault();
+        const target = $(href);
         
-        var target = this.hash;
-        var $target = $(target);
-        
-        if($target.length) {
+        if (target.length) {
             $('html, body').animate({
-                'scrollTop': $target.offset().top - 70
+                scrollTop: target.offset().top - 80
             }, 800, 'swing');
         }
     });
+}
 
-    // Active navigation highlighting
+// ===== SCROLL EFFECTS =====
+function initializeScrollEffects() {
+    const navbar = $('#navbar');
+    const scrollUpBtn = $('#scrollUpBtn');
+    
     $(window).scroll(function() {
-        var scrollDistance = $(window).scrollTop();
+        const scrollY = $(this).scrollTop();
         
-        $('section').each(function(i) {
-            if ($(this).position().top <= scrollDistance + 100) {
-                $('.navbar .menu li a.active').removeClass('active');
-                $('.navbar .menu li a').eq(i).addClass('active');
-            }
-        });
-    }).scroll();
-
-    // Product filter functionality
-    $('.filter-btn').click(function() {
-        var filterValue = $(this).attr('data-filter');
-        
-        // Update active button
-        $('.filter-btn').removeClass('active');
-        $(this).addClass('active');
-        
-        // Filter products
-        if (filterValue === 'all') {
-            $('.product-card').removeClass('hide').addClass('show');
+        // Sticky navbar
+        if (scrollY > 20) {
+            navbar.addClass('sticky');
         } else {
-            $('.product-card').each(function() {
-                var productCategory = $(this).attr('data-category');
-                if (productCategory === filterValue) {
-                    $(this).removeClass('hide').addClass('show');
-                } else {
-                    $(this).removeClass('show').addClass('hide');
-                }
-            });
+            navbar.removeClass('sticky');
+        }
+        
+        // Scroll up button
+        if (scrollY > 500) {
+            scrollUpBtn.addClass('show');
+        } else {
+            scrollUpBtn.removeClass('show');
+        }
+        
+        // Update active nav
+        updateActiveNav();
+        
+        // Animate elements
+        animateOnScroll();
+        
+        // Animate counters
+        if (!AppState.countersAnimated && isInViewport($('.stats-row'))) {
+            animateCounters();
+            AppState.countersAnimated = true;
+        }
+        
+        // Animate skill bars
+        if (!AppState.skillsAnimated && isInViewport($('.skills'))) {
+            animateSkillBars();
+            AppState.skillsAnimated = true;
         }
     });
 
-    // Product card interactions
-    $('.quick-view-btn').click(function(e) {
+    // Scroll to top - FIXED smooth scroll
+    scrollUpBtn.click(function() {
+        $('html, body').animate({ 
+            scrollTop: 0 
+        }, 1000, 'swing');
+        return false;
+    });
+}
+
+function updateActiveNav() {
+    const scrollPos = $(window).scrollTop() + 100;
+    
+    $('section[id]').each(function() {
+        const section = $(this);
+        const sectionTop = section.offset().top;
+        const sectionBottom = sectionTop + section.outerHeight();
+        const sectionId = section.attr('id');
+        
+        if (scrollPos >= sectionTop && scrollPos < sectionBottom) {
+            $('.menu-link').removeClass('active');
+            $(`.menu-link[href="#${sectionId}"]`).addClass('active');
+        }
+    });
+}
+
+// ===== HERO SECTION =====
+function initializeHero() {
+    if (typeof Typed !== 'undefined') {
+        new Typed(".typing", {
+            strings: [
+                "CONFECTIONARY INT'L", 
+                "CATERING SERVICES", 
+                "EVENT PLANNING", 
+                "CUSTOM CAKE DESIGNS",
+                "PREMIUM BAKERY"
+            ],
+            typeSpeed: 100,
+            backSpeed: 60,
+            backDelay: 1500,
+            loop: true
+        });
+    }
+
+    // Parallax effect
+    $(window).scroll(function() {
+        const scrolled = $(window).scrollTop();
+        $('.home').css('background-position', `center ${scrolled * 0.5}px`);
+    });
+}
+
+// ===== PRODUCTS =====
+function initializeProducts() {
+    // Search functionality
+    let searchTimeout;
+    $('#productSearch').on('input', function() {
+        clearTimeout(searchTimeout);
+        AppState.searchQuery = $(this).val().toLowerCase().trim();
+        
+        if (AppState.searchQuery) {
+            $('#searchClear').addClass('show');
+        } else {
+            $('#searchClear').removeClass('show');
+        }
+        
+        searchTimeout = setTimeout(() => {
+            filterProducts();
+        }, 300);
+    });
+
+    // Clear search
+    $('#searchClear').click(function() {
+        $('#productSearch').val('');
+        AppState.searchQuery = '';
+        $(this).removeClass('show');
+        filterProducts();
+    });
+
+    // Filter buttons
+    $(document).on('click', '.filter-btn', function() {
+        AppState.currentFilter = $(this).data('filter');
+        $('.filter-btn').removeClass('active');
+        $(this).addClass('active');
+        filterProducts();
+    });
+
+    // Clear filters
+    $('#clearFilters').click(function() {
+        $('#productSearch').val('');
+        $('#searchClear').removeClass('show');
+        AppState.searchQuery = '';
+        AppState.currentFilter = 'all';
+        $('.filter-btn').removeClass('active');
+        $('.filter-btn[data-filter="all"]').addClass('active');
+        filterProducts();
+    });
+
+    // Product card actions
+    $(document).on('click', '.quick-view-btn', function(e) {
         e.preventDefault();
-        var productId = $(this).attr('data-product');
+        const productId = $(this).data('product');
         showProductModal(productId);
     });
 
-    $('.add-to-cart-btn').click(function(e) {
+    $(document).on('click', '.add-to-cart-btn', function(e) {
         e.preventDefault();
-        var productId = $(this).attr('data-product');
+        const productId = $(this).data('product');
         addToCart(productId);
-        showNotification('Product added to cart!', 'success');
     });
 
-    $('.buy-now-btn').click(function(e) {
+    $(document).on('click', '.buy-now-btn', function(e) {
         e.preventDefault();
-        var productId = $(this).attr('data-product');
+        const productId = $(this).data('product');
         initiateOrder(productId);
     });
+}
 
-    // Contact form submission
-    $('.contact-form').submit(function(e) {
+// Load products from Appwrite
+async function loadDynamicProducts() {
+    try {
+        showProductsLoading(true);
+        
+        if (!window.productService) {
+            throw new Error('Product service not available');
+        }
+
+        const [productsResult, categoriesResult] = await Promise.all([
+            window.productService.getProducts(),
+            window.productService.getCategories()
+        ]);
+
+        AppState.products = productsResult.documents || [];
+        AppState.categories = categoriesResult.documents || [];
+        AppState.filteredProducts = [...AppState.products];
+
+        updateCategoryFilters();
+        renderProducts();
+        
+        showNotification(`Loaded ${AppState.products.length} products!`, 'success');
+        
+    } catch (error) {
+        console.error('Error loading products:', error);
+        showNotification('Failed to load products. Showing samples.', 'error');
+        loadSampleProducts();
+    } finally {
+        showProductsLoading(false);
+    }
+}
+
+// Make available globally
+window.loadDynamicProducts = loadDynamicProducts;
+
+// Update category filters
+function updateCategoryFilters() {
+    const container = $('#categoryFilters');
+    container.find('.filter-btn:not([data-filter="all"])').remove();
+    
+    AppState.categories.forEach(category => {
+        const btn = $(`
+            <button class="filter-btn" data-filter="${category.name.toLowerCase()}">
+                ${category.name}
+            </button>
+        `);
+        container.append(btn);
+    });
+}
+
+// Filter products
+function filterProducts() {
+    AppState.filteredProducts = AppState.products.filter(product => {
+        const matchesSearch = !AppState.searchQuery || 
+            product.name.toLowerCase().includes(AppState.searchQuery) ||
+            product.description.toLowerCase().includes(AppState.searchQuery) ||
+            product.category.toLowerCase().includes(AppState.searchQuery);
+
+        const matchesCategory = AppState.currentFilter === 'all' || 
+            product.category.toLowerCase() === AppState.currentFilter;
+
+        return matchesSearch && matchesCategory;
+    });
+
+    renderProducts();
+}
+
+// Render products
+function renderProducts() {
+    const grid = $('#productsGrid');
+    const noResults = $('#noResults');
+    
+    grid.find('.products-loading').remove();
+    grid.find('.product-card').remove();
+    
+    if (AppState.filteredProducts.length === 0) {
+        grid.hide();
+        noResults.addClass('show');
+        return;
+    }
+    
+    noResults.removeClass('show');
+    grid.show();
+    
+    AppState.filteredProducts.forEach((product, index) => {
+        const card = createProductCard(product);
+        grid.append(card);
+        
+        setTimeout(() => {
+            card.addClass('show');
+        }, index * 50);
+    });
+}
+
+// Create product card
+function createProductCard(product) {
+    const imageUrl = product.imageUrls?.[0] || 
+        'https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=No+Image';
+    
+    const price = window.productService ? 
+        window.productService.formatPrice(product.price) : 
+        `₦${product.price?.toLocaleString() || '0'}`;
+    
+    const categoryColor = getCategoryColor(product.category);
+    const productId = product.$id || product.id;
+    
+    return $(`
+        <div class="product-card" data-category="${product.category.toLowerCase()}" data-product-id="${productId}">
+            <div class="product-image">
+                <img src="${imageUrl}" alt="${product.name}" loading="lazy">
+                <div class="product-overlay">
+                    <div class="overlay-buttons">
+                        <button class="quick-view-btn" data-product="${productId}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="add-to-cart-btn" data-product="${productId}">
+                            <i class="fas fa-shopping-cart"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="product-badge" style="background: ${categoryColor}">${product.category}</div>
+            </div>
+            <div class="product-info">
+                <h3 class="product-title">${product.name}</h3>
+                <p class="product-description">${truncateText(product.description, 100)}</p>
+                <div class="product-price">${price}</div>
+                <button class="buy-now-btn" data-product="${productId}">
+                    <i class="fas fa-shopping-cart"></i>
+                    Order Now
+                </button>
+            </div>
+        </div>
+    `);
+}
+
+function getCategoryColor(category) {
+    const colors = {
+        premium: 'linear-gradient(135deg, #D4A574, #f39c12)',
+        vip: 'linear-gradient(135deg, #8B4A87, #c44569)',
+        special: 'linear-gradient(135deg, #e74c3c, #c0392b)'
+    };
+    return colors[category.toLowerCase()] || 'linear-gradient(135deg, #6b7280, #9ca3af)';
+}
+
+function showProductsLoading(show) {
+    if (show) {
+        $('#productsLoading').show();
+    } else {
+        $('#productsLoading').hide();
+    }
+}
+
+function loadSampleProducts() {
+    AppState.products = [
+        {
+            id: 'sample1',
+            name: 'Premium Vanilla Cake',
+            description: 'Rich vanilla sponge with premium cream frosting and delicate decorations',
+            price: 15000,
+            category: 'Premium',
+            imageUrls: ['https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=Vanilla+Cake']
+        },
+        {
+            id: 'sample2',
+            name: 'VIP Chocolate Supreme',
+            description: 'Luxurious chocolate masterpiece with gold accents and premium ingredients',
+            price: 28000,
+            category: 'VIP',
+            imageUrls: ['https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=Chocolate+Cake']
+        },
+        {
+            id: 'sample3',
+            name: 'Special Red Velvet',
+            description: 'Artisan red velvet with unique decorations and cream cheese frosting',
+            price: 22000,
+            category: 'Special',
+            imageUrls: ['https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=Red+Velvet']
+        }
+    ];
+    
+    AppState.filteredProducts = [...AppState.products];
+    renderProducts();
+}
+
+// ===== MODAL =====
+function initializeModal() {
+    $('#modalClose').click(closeModal);
+    
+    $('#productModal').click(function(e) {
+        if (e.target === this) {
+            closeModal();
+        }
+    });
+    
+    $(document).keydown(function(e) {
+        if (e.key === 'Escape' && $('#productModal').hasClass('show')) {
+            closeModal();
+        }
+    });
+    
+    $('#modalOrderBtn').click(function() {
+        if (AppState.currentProduct) {
+            initiateOrder(AppState.currentProduct.$id || AppState.currentProduct.id);
+            closeModal();
+        }
+    });
+    
+    $('#modalAddCartBtn').click(function() {
+        if (AppState.currentProduct) {
+            addToCart(AppState.currentProduct.$id || AppState.currentProduct.id);
+        }
+    });
+}
+
+function showProductModal(productId) {
+    const product = AppState.products.find(p => (p.$id || p.id) === productId);
+    if (!product) {
+        showNotification('Product not found', 'error');
+        return;
+    }
+
+    AppState.currentProduct = product;
+    
+    const imageUrl = product.imageUrls?.[0] || 'https://via.placeholder.com/600x400';
+    const price = window.productService ? 
+        window.productService.formatPrice(product.price) : 
+        `₦${product.price.toLocaleString()}`;
+    
+    $('#modalTitle').text(product.name);
+    $('#modalImage').attr('src', imageUrl);
+    $('#modalCategory').text(product.category).css('background', getCategoryColor(product.category));
+    $('#modalPrice').text(price);
+    $('#modalDescription').text(product.description);
+    
+    $('#productModal').addClass('show');
+    $('body').css('overflow', 'hidden');
+}
+
+function closeModal() {
+    $('#productModal').removeClass('show');
+    $('body').css('overflow', 'auto');
+    AppState.currentProduct = null;
+}
+
+// ===== CART MANAGEMENT (In-Memory Only) =====
+function initializeCart() {
+    updateCartCounter();
+}
+
+function addToCart(productId) {
+    const product = AppState.products.find(p => (p.$id || p.id) === productId);
+    if (!product) {
+        showNotification('Product not found', 'error');
+        return;
+    }
+
+    const existingItem = AppState.cart.find(item => item.id === productId);
+    
+    if (existingItem) {
+        existingItem.quantity += 1;
+        showNotification(`Increased ${product.name} quantity to ${existingItem.quantity}`, 'success');
+    } else {
+        AppState.cart.push({
+            id: productId,
+            name: product.name,
+            price: product.price,
+            image: product.imageUrls?.[0],
+            category: product.category,
+            quantity: 1
+        });
+        showNotification(`${product.name} added to cart!`, 'success');
+    }
+    
+    updateCartCounter();
+}
+
+function removeFromCart(productId) {
+    AppState.cart = AppState.cart.filter(item => item.id !== productId);
+    updateCartCounter();
+}
+
+function updateCartCounter() {
+    const totalItems = AppState.cart.reduce((sum, item) => sum + item.quantity, 0);
+    const counter = $('#cartCounter');
+    
+    if (totalItems > 0) {
+        counter.text(totalItems).show();
+    } else {
+        counter.hide();
+    }
+}
+
+function getCartTotal() {
+    return AppState.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+}
+
+function initiateOrder(productId) {
+    const product = AppState.products.find(p => (p.$id || p.id) === productId);
+    if (!product) {
+        showNotification('Product not found', 'error');
+        return;
+    }
+
+    addToCart(productId);
+    
+    $('html, body').animate({
+        scrollTop: $('#contact').offset().top - 80
+    }, 1000, 'swing');
+    
+    setTimeout(() => {
+        const price = window.productService ? 
+            window.productService.formatPrice(product.price) : 
+            `₦${product.price.toLocaleString()}`;
+            
+        $('#contactService').val('cake-order');
+        $('#contactMessage').val(
+            `I would like to order: ${product.name} - ${price}\n\nPlease contact me with more details.`
+        );
+        showNotification('Please fill out the contact form to complete your order.', 'info');
+    }, 1200);
+}
+
+// ===== CONTACT FORM =====
+function initializeContactForm() {
+    $('#contactForm').submit(function(e) {
         e.preventDefault();
         
-        // Get form data
-        var formData = {
-            name: $('input[type="text"]').val(),
-            email: $('input[type="email"]').val(),
-            phone: $('input[type="tel"]').val(),
-            service: $('select').val(),
-            message: $('textarea').val()
+        const formData = {
+            name: $('#contactName').val().trim(),
+            email: $('#contactEmail').val().trim(),
+            phone: $('#contactPhone').val().trim(),
+            service: $('#contactService').val(),
+            message: $('#contactMessage').val().trim()
         };
         
-        // Validate form
         if (validateContactForm(formData)) {
-            // Show loading state
-            var $submitBtn = $('.form-button button');
-            var originalText = $submitBtn.html();
-            $submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Sending...');
-            $submitBtn.prop('disabled', true);
-            
-            // Simulate form submission (replace with actual form handler)
-            setTimeout(function() {
-                $submitBtn.html('<i class="fas fa-check"></i> Message Sent!');
-                showNotification('Thank you! Your message has been sent successfully.', 'success');
-                
-                // Reset form
-                $('.contact-form')[0].reset();
-                
-                setTimeout(function() {
-                    $submitBtn.html(originalText);
-                    $submitBtn.prop('disabled', false);
-                }, 2000);
-            }, 2000);
+            submitContactForm(formData);
         }
     });
-
-    // Animate skill bars when in view
-    $(window).scroll(function() {
-        var skillsTop = $('.skills').offset().top;
-        var skillsBottom = skillsTop + $('.skills').outerHeight();
-        var scrollTop = $(window).scrollTop();
-        var windowHeight = $(window).height();
-        
-        if (scrollTop + windowHeight > skillsTop + 100 && scrollTop < skillsBottom) {
-            $('.skills .line').each(function() {
-                if (!$(this).hasClass('animated')) {
-                    $(this).addClass('animated');
-                    $(this).find('::before').css('animation-play-state', 'running');
-                }
-            });
-        }
-    });
-
-    // Initialize AOS (Animate On Scroll) effects
-    function initScrollAnimations() {
-        $('.product-card, .about .column, .skills .column').each(function() {
-            var $element = $(this);
-            var elementTop = $element.offset().top;
-            var elementBottom = elementTop + $element.outerHeight();
-            var viewportTop = $(window).scrollTop();
-            var viewportBottom = viewportTop + $(window).height();
-            
-            if (elementBottom > viewportTop && elementTop < viewportBottom) {
-                $element.addClass('animate-in');
-            }
-        });
-    }
-
-    $(window).scroll(initScrollAnimations);
-    initScrollAnimations(); // Run on page load
-
-    // Lazy loading for images
-    function lazyLoadImages() {
-        $('img[data-src]').each(function() {
-            var $img = $(this);
-            var imgTop = $img.offset().top;
-            var scrollTop = $(window).scrollTop();
-            var windowHeight = $(window).height();
-            
-            if (imgTop < scrollTop + windowHeight + 200) {
-                $img.attr('src', $img.attr('data-src'));
-                $img.removeAttr('data-src');
-            }
-        });
-    }
-
-    $(window).scroll(lazyLoadImages);
-    lazyLoadImages(); // Run on page load
-
-    // Show loading overlay on page load
-    $(window).on('load', function() {
-        $('.loading-overlay').fadeOut(500);
-    });
-
-    // Product search functionality (if search input exists)
-    $('#product-search').on('input', function() {
-        var searchTerm = $(this).val().toLowerCase();
-        
-        $('.product-card').each(function() {
-            var productTitle = $(this).find('.product-title').text().toLowerCase();
-            var productDescription = $(this).find('.product-description').text().toLowerCase();
-            
-            if (productTitle.includes(searchTerm) || productDescription.includes(searchTerm)) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
-    });
-
-    // Newsletter subscription (if newsletter form exists)
-    $('#newsletter-form').submit(function(e) {
-        e.preventDefault();
-        var email = $('#newsletter-email').val();
-        
-        if (validateEmail(email)) {
-            showNotification('Thank you for subscribing to our newsletter!', 'success');
-            $('#newsletter-email').val('');
-        } else {
-            showNotification('Please enter a valid email address.', 'error');
-        }
-    });
-
-});
-
-// Utility Functions
-
-// Show product modal
-function showProductModal(productId) {
-    // This would typically fetch product data and show a modal
-    console.log('Showing modal for product:', productId);
-    showNotification('Product details coming soon!', 'info');
 }
 
-// Add product to cart
-function addToCart(productId) {
-    // This would typically add the product to a cart system
-    console.log('Adding to cart:', productId);
+function validateContactForm(data) {
+    const errors = [];
     
-    // Update cart counter if exists
-    var currentCount = parseInt($('.cart-counter').text()) || 0;
-    $('.cart-counter').text(currentCount + 1).show();
-}
-
-// Initiate order process
-function initiateOrder(productId) {
-    // This would typically redirect to order form or open order modal
-    console.log('Initiating order for:', productId);
-    
-    // For now, scroll to contact form
-    $('html, body').animate({
-        scrollTop: $('#contact').offset().top - 70
-    }, 800);
-    
-    // Pre-fill the service selection
-    $('#contact select').val('cake-order');
-    
-    showNotification('Please fill out the contact form to place your order.', 'info');
-}
-
-// Form validation
-function validateContactForm(formData) {
-    var errors = [];
-    
-    if (!formData.name.trim()) {
-        errors.push('Name is required');
+    if (!data.name || data.name.length < 2) {
+        errors.push('Please enter a valid name');
     }
-    
-    if (!validateEmail(formData.email)) {
-        errors.push('Valid email is required');
+    if (!validateEmail(data.email)) {
+        errors.push('Please enter a valid email address');
     }
-    
-    if (!formData.phone.trim()) {
-        errors.push('Phone number is required');
+    if (!data.phone || data.phone.length < 10) {
+        errors.push('Please enter a valid phone number');
     }
-    
-    if (!formData.service) {
+    if (!data.service) {
         errors.push('Please select a service');
     }
-    
-    if (!formData.message.trim()) {
-        errors.push('Message is required');
+    if (!data.message || data.message.length < 10) {
+        errors.push('Please enter a message (minimum 10 characters)');
     }
     
     if (errors.length > 0) {
@@ -318,122 +867,176 @@ function validateContactForm(formData) {
     return true;
 }
 
-// Email validation
-function validateEmail(email) {
-    var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+function submitContactForm(data) {
+    const submitBtn = $('#submitBtn');
+    const originalHtml = submitBtn.html();
+    
+    submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Sending...').prop('disabled', true);
+    
+    // Simulate form submission
+    setTimeout(() => {
+        submitBtn.html('<i class="fas fa-check"></i> Message Sent!');
+        showNotification('Thank you! Your message has been sent successfully. We\'ll get back to you soon!', 'success');
+        
+        $('#contactForm')[0].reset();
+        
+        setTimeout(() => {
+            submitBtn.html(originalHtml).prop('disabled', false);
+        }, 2000);
+    }, 2000);
 }
 
-// Show notification
-function showNotification(message, type) {
-    // Remove existing notifications
+// ===== NEWSLETTER =====
+function initializeNewsletter() {
+    $('#newsletterForm').submit(function(e) {
+        e.preventDefault();
+        
+        const email = $('#newsletterEmail').val().trim();
+        
+        if (validateEmail(email)) {
+            submitNewsletter(email);
+        } else {
+            showNotification('Please enter a valid email address.', 'error');
+        }
+    });
+}
+
+function submitNewsletter(email) {
+    const form = $('#newsletterForm');
+    const button = form.find('button');
+    const originalHtml = button.html();
+    
+    button.html('<i class="fas fa-spinner fa-spin"></i>').prop('disabled', true);
+    
+    setTimeout(() => {
+        showNotification('Thank you for subscribing to our newsletter!', 'success');
+        $('#newsletterEmail').val('');
+        button.html(originalHtml).prop('disabled', false);
+    }, 1500);
+}
+
+// ===== ANIMATIONS =====
+function initializeAnimations() {
+    animateOnScroll();
+}
+
+function animateOnScroll() {
+    $('.product-card, .stat-item, .highlight-item, .info-row').each(function() {
+        if (isInViewport($(this))) {
+            $(this).addClass('fade-in-up');
+        }
+    });
+}
+
+function isInViewport($element) {
+    if (!$element.length) return false;
+    
+    const elementTop = $element.offset().top;
+    const elementBottom = elementTop + $element.outerHeight();
+    const viewportTop = $(window).scrollTop();
+    const viewportBottom = viewportTop + $(window).height();
+    
+    return elementBottom > viewportTop && elementTop < viewportBottom - 100;
+}
+
+// ===== COUNTER ANIMATION =====
+function animateCounters() {
+    $('.stat-number').each(function() {
+        const $counter = $(this);
+        const target = parseInt($counter.attr('data-count'));
+        const duration = 2000;
+        const steps = 60;
+        const increment = target / steps;
+        const stepTime = duration / steps;
+        let current = 0;
+        
+        const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+                current = target;
+                clearInterval(timer);
+            }
+            $counter.text(Math.floor(current));
+        }, stepTime);
+    });
+}
+
+// ===== SKILL BARS ANIMATION =====
+function animateSkillBars() {
+    $('.skills .line').each(function() {
+        const $line = $(this);
+        const progress = $line.data('progress');
+        $line.css('--progress-width', progress + '%');
+        $line.addClass('animated');
+    });
+}
+
+// ===== NOTIFICATION SYSTEM =====
+function showNotification(message, type = 'info') {
     $('.notification').remove();
     
-    var notificationClass = 'notification notification-' + type;
-    var iconClass = type === 'success' ? 'fa-check-circle' : 
-                   type === 'error' ? 'fa-exclamation-circle' : 
-                   'fa-info-circle';
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        info: 'fa-info-circle'
+    };
     
-    var notification = $('<div class="' + notificationClass + '">' +
-        '<i class="fas ' + iconClass + '"></i>' +
-        '<span>' + message + '</span>' +
-        '<button class="notification-close"><i class="fas fa-times"></i></button>' +
-        '</div>');
+    const notification = $(`
+        <div class="notification notification-${type}">
+            <i class="fas ${icons[type]}"></i>
+            <span>${message}</span>
+            <button class="notification-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `);
     
     $('body').append(notification);
     
-    // Show notification
-    setTimeout(function() {
-        notification.addClass('show');
-    }, 100);
+    setTimeout(() => notification.addClass('show'), 100);
     
-    // Auto hide after 5 seconds
-    setTimeout(function() {
+    const autoHideTimer = setTimeout(() => {
         hideNotification(notification);
     }, 5000);
     
-    // Close button functionality
     notification.find('.notification-close').click(function() {
+        clearTimeout(autoHideTimer);
         hideNotification(notification);
     });
 }
 
-// Hide notification
-function hideNotification(notification) {
-    notification.removeClass('show');
-    setTimeout(function() {
-        notification.remove();
-    }, 300);
+function hideNotification($notification) {
+    $notification.removeClass('show');
+    setTimeout(() => $notification.remove(), 400);
 }
 
-// Preloader
-$(window).on('load', function() {
-    $('#preloader').fadeOut('slow');
+// ===== UTILITY FUNCTIONS =====
+function validateEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function truncateText(text, maxLength) {
+    if (!text) return '';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+// ===== ERROR HANDLING =====
+window.addEventListener('error', function(e) {
+    console.error('JavaScript Error:', e.error);
+    showNotification('Something went wrong. Please refresh if issues persist.', 'error');
 });
 
-// Back to top button smooth scroll
-$('.scroll-up-btn').click(function() {
-    $('html, body').animate({scrollTop: 0}, 1000);
-    return false;
-});
+// ===== EXPORT FUNCTIONS =====
+window.showNotification = showNotification;
+window.closeModal = closeModal;
+window.addToCart = addToCart;
 
-// Initialize everything when document is ready
-$(document).ready(function() {
-    // Set initial product filter to show all
-    $('.product-card').addClass('show');
-    
-    // Add CSS for notifications if not already present
-    if (!$('#notification-styles').length) {
-        $('<style id="notification-styles">' +
-            '.notification {' +
-                'position: fixed;' +
-                'top: 20px;' +
-                'right: 20px;' +
-                'min-width: 300px;' +
-                'padding: 15px 20px;' +
-                'border-radius: 8px;' +
-                'color: #fff;' +
-                'z-index: 10000;' +
-                'display: flex;' +
-                'align-items: center;' +
-                'gap: 10px;' +
-                'transform: translateX(400px);' +
-                'transition: transform 0.3s ease;' +
-                'box-shadow: 0 4px 15px rgba(0,0,0,0.2);' +
-            '}' +
-            '.notification.show {' +
-                'transform: translateX(0);' +
-            '}' +
-            '.notification-success {' +
-                'background: linear-gradient(135deg, #27ae60, #2ecc71);' +
-            '}' +
-            '.notification-error {' +
-                'background: linear-gradient(135deg, #e74c3c, #c0392b);' +
-            '}' +
-            '.notification-info {' +
-                'background: linear-gradient(135deg, #3498db, #2980b9);' +
-            '}' +
-            '.notification-close {' +
-                'background: none;' +
-                'border: none;' +
-                'color: #fff;' +
-                'cursor: pointer;' +
-                'margin-left: auto;' +
-                'padding: 5px;' +
-            '}' +
-            '@media (max-width: 768px) {' +
-                '.notification {' +
-                    'right: 10px;' +
-                    'left: 10px;' +
-                    'min-width: auto;' +
-                    'transform: translateY(-100px);' +
-                '}' +
-                '.notification.show {' +
-                    'transform: translateY(0);' +
-                '}' +
-            '}' +
-        '</style>').appendTo('head');
-    }
-    
-    console.log('TEETEE FABULOUS website initialized successfully!');
-});
+console.log('🎂 Enhanced TEETEE FABULOUS loaded successfully!');
