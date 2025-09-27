@@ -2058,13 +2058,6 @@ footer {
         margin-bottom: 30px;
     }
     
-    .skills .left .text {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 30px;
-    font-family: "Playfair Display", serif;
-}
-    
     .cta-buttons {
         flex-direction: column;
         align-items: center;

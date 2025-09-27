@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cart Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .debug-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .debug-button {
+            background: #8B4A87;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .debug-button:hover {
+            background: #D4A574;
+        }
+        .debug-log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .debug-log div {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <div class="debug-panel">
+        <h2>🛒 Cart Debug & Test Panel</h2>
+        <p>Use these buttons to test the cart functionality:</p>
+        
+        <button class="debug-button" onclick="testCartOpen()">🚀 Test Open Cart</button>
+        <button class="debug-button" onclick="testCartClose()">❌ Test Close Cart</button>
+        <button class="debug-button" onclick="testAddToCart()">➕ Add Test Product</button>
+        <button class="debug-button" onclick="checkCartElements()">🔍 Check Cart Elements</button>
+        <button class="debug-button" onclick="testClickHandlers()">⚡ Test Click Handlers</button>
+        <button class="debug-button" onclick="clearDebugLog()">🗑️ Clear Log</button>
+        
+        <div class="debug-log" id="debugLog">
+            <div class="info">Debug log ready...</div>
+        </div>
+    </div>
+
+    <div class="debug-panel">
+        <h3>Test Cart Links (Click these):</h3>
+        <a href="#" class="cart-link" id="testCartLink" style="display: inline-block; background: #8B4A87; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin: 5px;">
+            <i class="fas fa-shopping-cart"></i> Desktop Cart Link
+        </a>
+        
+        <a href="#" class="cart-link mobile-cart" id="testMobileCartLink" style="display: inline-block; background: #D4A574; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; margin: 5px;">
+            <i class="fas fa-shopping-cart"></i> Mobile Cart Link
+        </a>
+    </div>
+
+    <!-- Font Awesome for icons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <script>
+        // Debug logging function
+        function logDebug(message, type = 'info') {
+            const log = document.getElementById('debugLog');
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.insertBefore(div, log.firstChild);
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        // Test cart open
+        function testCartOpen() {
+            logDebug('Testing cart open...', 'info');
+            if (typeof window.openCart === 'function') {
+                window.openCart();
+                logDebug('✅ openCart() function called', 'success');
+            } else {
+                logDebug('❌ openCart() function not found!', 'error');
+                logDebug('Attempting to manually open cart...', 'warning');
+                $('#cartSidebar').addClass('active');
+                $('#cartOverlay').addClass('active');
+                logDebug('Manual cart open attempted', 'info');
+            }
+        }
+
+        // Test cart close
+        function testCartClose() {
+            logDebug('Testing cart close...', 'info');
+            if (typeof window.closeCart === 'function') {
+                window.closeCart();
+                logDebug('✅ closeCart() function called', 'success');
+            } else {
+                logDebug('❌ closeCart() function not found!', 'error');
+                $('#cartSidebar').removeClass('active');
+                $('#cartOverlay').removeClass('active');
+                logDebug('Manual cart close attempted', 'info');
+            }
+        }
+
+        // Test add to cart
+        function testAddToCart() {
+            logDebug('Testing add to cart...', 'info');
+            if (typeof window.addToCart === 'function') {
+                window.addToCart('sample1');
+                logDebug('✅ addToCart() function called', 'success');
+            } else {
+                logDebug('❌ addToCart() function not found!', 'error');
+            }
+        }
+
+        // Check if cart elements exist
+        function checkCartElements() {
+            logDebug('Checking cart elements...', 'info');
+            
+            const checks = [
+                { selector: '#cartLink', name: 'Desktop Cart Link' },
+                { selector: '#mobileCartLink', name: 'Mobile Cart Link' },
+                { selector: '#cartSidebar', name: 'Cart Sidebar' },
+                { selector: '#cartOverlay', name: 'Cart Overlay' },
+                { selector: '#cartItemsList', name: 'Cart Items List' },
+                { selector: '.cart-link', name: 'Cart Link Class' }
+            ];
+            
+            checks.forEach(check => {
+                const exists = $(check.selector).length > 0;
+                if (exists) {
+                    logDebug(`✅ ${check.name} exists (${$(check.selector).length} found)`, 'success');
+                } else {
+                    logDebug(`❌ ${check.name} NOT found!`, 'error');
+                }
+            });
+        }
+
+        // Test click handlers
+        function testClickHandlers() {
+            logDebug('Testing click handlers...', 'info');
+            
+            // Check if jQuery is loaded
+            if (typeof $ === 'undefined') {
+                logDebug('❌ jQuery not loaded!', 'error');
+                return;
+            }
+            logDebug('✅ jQuery is loaded', 'success');
+            
+            // Check event handlers
+            const cartLink = $('#cartLink');
+            if (cartLink.length > 0) {
+                const events = $._data(cartLink[0], 'events');
+                if (events && events.click) {
+                    logDebug(`✅ Cart link has ${events.click.length} click handler(s)`, 'success');
+                } else {
+                    logDebug('❌ No click handlers attached to cart link!', 'error');
+                }
+            } else {
+                log
