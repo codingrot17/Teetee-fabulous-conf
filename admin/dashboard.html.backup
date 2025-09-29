@@ -6,9 +6,9 @@
     <title>Admin Dashboard - TEETEE FABULOUS</title>
     <link rel="icon" href="../asset/images/brand.png" type="image/png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <link rel="stylesheet" href="css/dashboard.css">
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-     <!-- Load Appwrite with Authentication -->
+    
+    <!-- Load Appwrite with Authentication -->
     <script type="module">
         import { Client, Account, Databases, Storage, Query, Permission, Role, ID } from 'https://cdn.skypack.dev/appwrite@13.0.0';
 
@@ -354,6 +354,593 @@
         });
     </script>
    
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 260px;
+            height: 100vh;
+            background: linear-gradient(135deg, #2c3e50, #34495e);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar.collapsed {
+            transform: translateX(-260px);
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+            text-decoration: none;
+        }
+        
+        .sidebar-logo-icon {
+            font-size: 28px;
+        }
+        
+        .sidebar-logo-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .sidebar-nav {
+            padding: 20px 0;
+        }
+        
+        .nav-section {
+            margin-bottom: 30px;
+        }
+        
+        .nav-section-title {
+            color: #94a3b8;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+            padding: 0 20px;
+            margin-bottom: 10px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #cbd5e1;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .nav-item:hover,
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #D4A574;
+            border-left-color: #D4A574;
+        }
+        
+        .nav-item i {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 16px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 260px;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+        
+        .main-content.sidebar-collapsed {
+            margin-left: 0;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 24px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #64748b;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-toggle:hover {
+            background: #f1f5f9;
+            color: #8B4A87;
+        }
+        
+        .page-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .user-menu {
+            position: relative;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.05);
+        }
+        
+        .user-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            padding: 8px 0;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: #374151;
+            text-decoration: none;
+            transition: background-color 0.2s ease;
+            gap: 12px;
+        }
+        
+        .dropdown-item:hover {
+            background: #f8fafc;
+        }
+        
+        .dropdown-item.danger {
+            color: #dc2626;
+        }
+        
+        .dropdown-item.danger:hover {
+            background: #fef2f2;
+        }
+        
+        /* Dashboard Content */
+        .dashboard-content {
+            padding: 24px;
+        }
+        
+        /* Loading State */
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 20px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #8B4A87;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        
+        .stat-title {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        
+        .stat-icon.products {
+            background: rgba(139, 74, 135, 0.1);
+            color: #8B4A87;
+        }
+        
+        .stat-icon.orders {
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+        }
+        
+        .stat-icon.revenue {
+            background: rgba(212, 165, 116, 0.1);
+            color: #D4A574;
+        }
+        
+        .stat-icon.customers {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .stat-change {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+        }
+        
+        .stat-change.positive {
+            color: #22c55e;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 32px;
+        }
+        
+        .quick-actions-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 20px;
+        }
+        
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .action-button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #374151;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .action-button:hover {
+            background: #f1f5f9;
+            border-color: #8B4A87;
+            color: #8B4A87;
+        }
+        
+        .action-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            color: white;
+            font-size: 16px;
+        }
+        
+        .action-text {
+            flex: 1;
+        }
+        
+        .action-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .action-desc {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        /* Recent Activity */
+        .recent-activity {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .activity-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 20px;
+        }
+        
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+        
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+        }
+        
+        .activity-icon.order {
+            background: #22c55e;
+        }
+        
+        .activity-icon.product {
+            background: #8B4A87;
+        }
+        
+        .activity-icon.content {
+            background: #D4A574;
+        }
+        
+        .activity-content {
+            flex: 1;
+        }
+        
+        .activity-text {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        
+        .activity-time {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        /* Auth Error */
+        .auth-error {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin: 24px;
+        }
+        
+        .auth-error-icon {
+            font-size: 48px;
+            color: #ef4444;
+            margin-bottom: 20px;
+        }
+        
+        .auth-error-title {
+            font-size: 20px;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+        
+        .auth-error-message {
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+        
+        .retry-btn {
+            background: linear-gradient(135deg, #8B4A87, #D4A574);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 auto;
+            transition: all 0.3s ease;
+        }
+        
+        .retry-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(139, 74, 135, 0.3);
+        }
+        
+        .login-btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .login-btn:hover {
+            background: #4f46e5;
+            transform: translateY(-2px);
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-260px);
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .actions-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                padding: 0 16px;
+            }
+            
+            .dashboard-content {
+                padding: 16px;
+            }
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+        }
+        
+        @media (max-width: 576px) {
+          .page-title{
+            font-size: 18px;
+          }
+        }
+    </style>
 </head>
 <body x-data="adminDashboard()">
     <!-- Authentication Error (shows before sidebar if auth fails) -->
@@ -621,6 +1208,246 @@
             </div>
         </main>
     </div>
-   <script src="js/dashboard.js"></script>
-    </body>
+
+    <script>
+        function adminDashboard() {
+            return {
+                currentUser: null,
+                authError: false,
+                sidebarOpen: window.innerWidth > 768,
+                activeSection: 'dashboard',
+                loading: true,
+                serviceError: false,
+                serviceErrorMessage: '',
+                dynamicContent: '',
+                servicesReady: false,
+                stats: {
+                    products: 0,
+                    categories: 0,
+                    revenue: 250000,
+                    customers: 0
+                },
+                recentActivity: [
+                    { id: 1, type: 'product', icon: 'fas fa-check', text: 'Dashboard initialized successfully', time: 'Just now' },
+                    { id: 2, type: 'content', icon: 'fas fa-user', text: 'Admin user authenticated', time: 'Just now' },
+                    { id: 3, type: 'order', icon: 'fas fa-database', text: 'Connected to Appwrite database', time: '1 minute ago' }
+                ],
+                
+                sectionFiles: {
+                    'products': 'components/products.html',
+                    'orders': 'components/orders.html',
+                    'customers': 'components/customers.html',
+                    'content': 'components/content.html',
+                    'media': 'components/media.html',
+                    'categories': 'components/categories.html',
+                    'settings': 'components/settings.html',
+                    'analytics': 'components/analytics.html'
+                },
+                
+                async init() {
+                    console.log('Dashboard initialized');
+                    
+                    // Listen for authentication events
+                    window.addEventListener('appwrite-ready', async (event) => {
+                        this.currentUser = event.detail.user;
+                        this.servicesReady = true;
+                        await this.loadDashboardData();
+                    });
+                    
+                    window.addEventListener('appwrite-error', (event) => {
+                        this.serviceError = true;
+                        this.serviceErrorMessage = event.detail.error;
+                        this.loading = false;
+                    });
+                    
+                    // Check if services are already ready
+                    if (window.dbService && window.authService) {
+                        const authState = await window.authService.checkAuthState();
+                        if (authState.authenticated) {
+                            this.currentUser = authState.user;
+                            this.servicesReady = true;
+                            await this.loadDashboardData();
+                        } else {
+                            this.authError = true;
+                            this.loading = false;
+                        }
+                    }
+                    
+                    this.initializeFromState();
+                    window.addEventListener('hashchange', () => this.handleHashChange());
+                    window.addEventListener('resize', () => {
+                        this.sidebarOpen = window.innerWidth > 768;
+                    });
+                },
+                
+                async loadDashboardData() {
+                    this.loading = true;
+                    this.serviceError = false;
+                    
+                    try {
+                        // Load basic stats
+                        const [productsResult, categoriesResult] = await Promise.all([
+                            window.dbService.getProducts({ limit: 100 }),
+                            window.dbService.getCategories()
+                        ]);
+                        
+                        this.stats.products = productsResult.total || 0;
+                        this.stats.categories = categoriesResult.total || 0;
+                        
+                        console.log('Dashboard data loaded:', this.stats);
+                        
+                    } catch (error) {
+                        console.error('Error loading dashboard data:', error);
+                        this.serviceError = true;
+                        this.serviceErrorMessage = `Failed to load dashboard data: ${error.message}`;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async retryServiceConnection() {
+                    this.loading = true;
+                    this.serviceError = false;
+                    
+                    try {
+                        if (window.dbService && window.authService) {
+                            const authState = await window.authService.checkAuthState();
+                            if (authState.authenticated) {
+                                this.currentUser = authState.user;
+                                await this.loadDashboardData();
+                            } else {
+                                this.authError = true;
+                                this.loading = false;
+                            }
+                        } else {
+                            throw new Error('Services still not available');
+                        }
+                    } catch (error) {
+                        this.serviceError = true;
+                        this.serviceErrorMessage = 'Connection retry failed. Please refresh the page.';
+                        this.loading = false;
+                    }
+                },
+                
+                goToLogin() {
+                    window.location.href = 'login.html';
+                },
+                
+                initializeFromState() {
+                    let initialSection = window.location.hash.substring(1);
+                    if (!initialSection) {
+                        initialSection = localStorage.getItem('dashboardActiveSection') || 'dashboard';
+                    }
+                    const validSections = ['dashboard','products','orders','customers','content','media','categories','settings','analytics'];
+                    if (validSections.includes(initialSection)) {
+                        this.setActiveSection(initialSection, false);
+                    }
+                },
+                
+                handleHashChange() {
+                    const section = window.location.hash.substring(1);
+                    if (section && section !== this.activeSection) {
+                        this.setActiveSection(section, false);
+                    }
+                },
+                
+                toggleSidebar() {
+                    this.sidebarOpen = !this.sidebarOpen;
+                },
+                
+                async setActiveSection(section, updateUrl = true) {
+                    if (!this.servicesReady && section !== 'dashboard') {
+                        alert('Services are not yet ready. Please wait or refresh the page.');
+                        return;
+                    }
+                    
+                    this.activeSection = section;
+                    if (updateUrl) {
+                        window.location.hash = section === 'dashboard' ? '' : section;
+                    }
+                    localStorage.setItem('dashboardActiveSection', section);
+                    if (window.innerWidth <= 768) {
+                        this.sidebarOpen = false;
+                    }
+                    if (section !== 'dashboard') {
+                        await this.loadSectionContent(section);
+                    }
+                },
+                
+                async loadSectionContent(section) {
+                    this.loading = true;
+                    this.dynamicContent = '';
+                    try {
+                        const filePath = this.sectionFiles[section];
+                        if (filePath) {
+                            const response = await fetch(filePath);
+                            if (response.ok) {
+                                const content = await response.text();
+                                this.dynamicContent = content;
+                                this.$nextTick(() => {
+                                    const container = document.querySelector('[x-html="dynamicContent"]');
+                                    if (container && container.firstElementChild) {
+                                        Alpine.initTree(container.firstElementChild);
+                                    }
+                                });
+                            } else {
+                                this.dynamicContent = this.getPlaceholderContent(section);
+                            }
+                        } else {
+                            this.dynamicContent = this.getPlaceholderContent(section);
+                        }
+                    } catch (error) {
+                        console.error('Error loading content:', error);
+                        this.dynamicContent = this.getPlaceholderContent(section);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                getPlaceholderContent(section) {
+                    return `
+                        <div style="text-align: center; padding: 60px 20px;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">🚧</div>
+                            <h2 style="font-size: 24px; margin-bottom: 12px; color: #374151;">${this.getPageTitle(section)}</h2>
+                            <p style="color: #6b7280;">This section is under development. Coming soon!</p>
+                        </div>
+                    `;
+                },
+                
+                getPageTitle(section = null) {
+                    const currentSection = section || this.activeSection;
+                    const titles = {
+                        dashboard: 'Dashboard',
+                        products: 'Products Management',
+                        orders: 'Orders Management',
+                        customers: 'Customers',
+                        content: 'Site Content',
+                        media: 'Media Library',
+                        categories: 'Categories',
+                        settings: 'Settings',
+                        analytics: 'Analytics'
+                    };
+                    return titles[currentSection] || 'Dashboard';
+                },
+                
+                async handleLogout() {
+                    try {
+                        if (window.authService) {
+                            await window.authService.logout();
+                        }
+                        localStorage.removeItem('dashboardActiveSection');
+                        window.location.href = 'login.html';
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                        // Force redirect even if logout fails
+                        window.location.href = 'login.html';
+                    }
+                }
+            }
+        }
+        
+        // Make adminDashboard available globally for debugging
+        window.adminDashboard = adminDashboard;
+    </script>
+</body>
 </html>

@@ -2064,6 +2064,14 @@ footer {
     margin-bottom: 30px;
     font-family: "Playfair Display", serif;
 }
+
+
+.about .right .text {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 30px;
+    font-family: "Playfair Display", serif;
+}
     
     .cta-buttons {
         flex-direction: column;

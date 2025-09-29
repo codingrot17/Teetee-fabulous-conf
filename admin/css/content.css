@@ -1,0 +1,229 @@
+.main-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+/* Loading State */
+.loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 120px 20px;
+}
+
+.loading-spinner-enhanced {
+    text-align: center;
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid #f3f4f6;
+    border-top: 4px solid #8b4a87;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+}
+
+.loading-spinner-enhanced p {
+    color: #6b7280;
+    font-size: 16px;
+    margin: 0;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.header h2 {
+    font-size: clamp(20px, 2vw, 32px);
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.tab {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    text-transform: capitalize;
+}
+.tab:hover {
+    background: #f1f5f9;
+    border-color: #8b4a87;
+}
+.tab.active {
+    background: linear-gradient(135deg, #8b4a87, #d4a574);
+    color: white;
+    border-color: transparent;
+}
+
+.card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    margin-bottom: 24px;
+}
+@media (max-width: 640px) {
+    .card {
+        padding: 16px;
+    }
+}
+
+.card h3 {
+    font-size: 20px;
+    margin-bottom: 20px;
+    font-weight: 600;
+    color: #1e293b;
+}
+.card h4 {
+    font-size: 16px;
+    margin: 20px 0 12px 0;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+}
+
+.input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+.input:focus {
+    outline: none;
+    border-color: #8b4a87;
+    box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+}
+.input.small {
+    width: 80px;
+}
+
+.inline-inputs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+.inline-inputs .input {
+    margin-bottom: 0;
+    flex: 1 1 100%;
+}
+@media (min-width: 768px) {
+    .inline-inputs .input {
+        flex: 1;
+    }
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.btn-danger.small {
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+.btn-primary {
+    background: linear-gradient(135deg, #8b4a87, #d4a574);
+    color: white;
+    border: none;
+}
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+.btn-secondary {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+}
+.btn-secondary:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+}
+.btn-danger {
+    background: #ef4444;
+    border: 1px solid #dc2626;
+    color: white;
+}
+.btn-danger:hover {
+    background: #dc2626;
+}
+.btn-danger.small {
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+/* Toast */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    color: white;
+    font-weight: 500;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    min-width: 280px;
+}
+.toast-success {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+.toast-error {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+.toast-info {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
