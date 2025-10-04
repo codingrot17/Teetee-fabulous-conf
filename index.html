@@ -124,7 +124,10 @@
             import {
                 Client,
                 Databases,
-                Query
+                Query,
+                ID,
+                Permission,
+                Role
             } from "https://cdn.skypack.dev/appwrite@13.0.0";
 
             const APPWRITE_CONFIG = {
@@ -133,7 +136,8 @@
                 databaseId: "68cdb1dc00266358cd6b",
                 collections: {
                     products: "products",
-                    categories: "categories"
+                    categories: "categories",
+                    orders: "orders"
                 },
                 bucketId: "68cdb9ef003cf2887d53"
             };
@@ -215,7 +219,38 @@
                 }
             }
 
+            // --- OrderService ---
+            class OrderService {
+                async createOrder(orderData) {
+                    try {
+                        // Allows anyone to create an order document
+                        const permissions = [
+                            Permission.read(Role.any()),
+                            Permission.write(Role.any())
+                        ];
+
+                        const document = await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.orders,
+                            ID.unique(),
+                            orderData,
+                            permissions
+                        );
+                        return document;
+                    } catch (error) {
+                        console.error(
+                            "Appwrite order submission error:",
+                            error
+                        );
+                        throw new Error(
+                            "Failed to place order. Please try again. Check console for details."
+                        );
+                    }
+                }
+            }
+
             window.productService = new ProductService();
+            window.orderService = new OrderService(); 
             window.APPWRITE_CONFIG = APPWRITE_CONFIG;
 
             document.addEventListener("DOMContentLoaded", async () => {

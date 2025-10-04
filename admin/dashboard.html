@@ -1,626 +1,940 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - TEETEE FABULOUS</title>
-    <link rel="icon" href="../asset/images/brand.png" type="image/png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
-    <link rel="stylesheet" href="css/dashboard.css">
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-     <!-- Load Appwrite with Authentication -->
-    <script type="module">
-        import { Client, Account, Databases, Storage, Query, Permission, Role, ID } from 'https://cdn.skypack.dev/appwrite@13.0.0';
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin Dashboard - TEETEE FABULOUS</title>
+        <link rel="icon" href="../asset/images/brand.png" type="image/png" />
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+        />
+        <link rel="stylesheet" href="css/dashboard.css" />
+        <!-- Alpine Core -->
+        <script
+            defer
+            src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"
+        ></script>
 
-        // Appwrite configuration
-        const APPWRITE_CONFIG = {
-            endpoint: 'https://cloud.appwrite.io/v1', 
-            projectId: '68ca0f1c00035ab92fa8', 
-            databaseId: '68cdb1dc00266358cd6b',
-            collections: {
-                products: 'products',
-                categories: 'categories',
-                site_content: 'site_content',
-                orders: 'orders',
-                users: 'users',
-                settings: 'settings'
-            },
-            bucketId: '68cdb9ef003cf2887d53'
-        };
+        <!-- Alpine Focus Plugin -->
+        <script
+            defer
+            src="https://unpkg.com/@alpinejs/focus@3.x.x/dist/cdn.min.js"
+        ></script>
 
-        // Initialize Appwrite
-        const client = new Client()
-            .setEndpoint(APPWRITE_CONFIG.endpoint)
-            .setProject(APPWRITE_CONFIG.projectId);
+        <!-- Orders Component (needed for orders.html) -->
+        <script defer src="js/ordersComponent.js"></script>
 
-        const account = new Account(client);
-        const databases = new Databases(client);
-        const storage = new Storage(client);
+        <!-- Load Appwrite with Authentication -->
+        <script type="module">
+            import {
+                Client,
+                Account,
+                Databases,
+                Storage,
+                Query,
+                Permission,
+                Role,
+                ID
+            } from "https://cdn.skypack.dev/appwrite@13.0.0";
 
-        // Auth Service
-        class AuthService {
-            async getCurrentUser() {
-                try {
-                    const user = await account.get();
-                    return user;
-                } catch (error) {
-                    return null;
-                }
-            }
+            // Appwrite configuration
+            const APPWRITE_CONFIG = {
+                endpoint: "https://cloud.appwrite.io/v1",
+                projectId: "68ca0f1c00035ab92fa8",
+                databaseId: "68cdb1dc00266358cd6b",
+                collections: {
+                    products: "products",
+                    categories: "categories",
+                    site_content: "site_content",
+                    orders: "orders",
+                    users: "users",
+                    settings: "settings"
+                },
+                bucketId: "68cdb9ef003cf2887d53"
+            };
 
-            async logout() {
-                try {
-                    await account.deleteSession('current');
-                    return true;
-                } catch (error) {
-                    throw new Error(`Logout failed: ${error.message}`);
-                }
-            }
+            // Initialize Appwrite
+            const client = new Client()
+                .setEndpoint(APPWRITE_CONFIG.endpoint)
+                .setProject(APPWRITE_CONFIG.projectId);
 
-            async checkAuthState() {
-                try {
-                    const user = await this.getCurrentUser();
-                    return { authenticated: !!user, user };
-                } catch (error) {
-                    return { authenticated: false, user: null };
-                }
-            }
-        }
+            const account = new Account(client);
+            const databases = new Databases(client);
+            const storage = new Storage(client);
 
-        // Database Service
-        class DatabaseService {
-            async createProduct(productData, imageFiles = []) {
-                try {
-                    const imageIds = [];
-                    for (const file of imageFiles) {
-                        const fileResponse = await storage.createFile(
-                            APPWRITE_CONFIG.bucketId,
-                            ID.unique(),
-                            file
-                        );
-                        imageIds.push(fileResponse.$id);
+            // Auth Service
+            class AuthService {
+                async getCurrentUser() {
+                    try {
+                        const user = await account.get();
+                        return user;
+                    } catch (error) {
+                        return null;
                     }
+                }
 
-                    const product = await databases.createDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.products,
-                        ID.unique(),
-                        {
-                            name: productData.name,
-                            description: productData.description,
-                            price: parseInt(productData.price),
-                            category: productData.category,
-                            status: productData.status || 'active',
-                            images: imageIds,
-                            $createdAt: new Date().toISOString(),
-                            $updatedAt: new Date().toISOString()
+                async logout() {
+                    try {
+                        await account.deleteSession("current");
+                        return true;
+                    } catch (error) {
+                        throw new Error(`Logout failed: ${error.message}`);
+                    }
+                }
+
+                async checkAuthState() {
+                    try {
+                        const user = await this.getCurrentUser();
+                        return { authenticated: !!user, user };
+                    } catch (error) {
+                        return { authenticated: false, user: null };
+                    }
+                }
+            }
+            // Database Service
+            class DatabaseService {
+                async createProduct(productData, imageFiles = []) {
+                    try {
+                        const imageIds = [];
+                        for (const file of imageFiles) {
+                            const fileResponse = await storage.createFile(
+                                APPWRITE_CONFIG.bucketId,
+                                ID.unique(),
+                                file
+                            );
+                            imageIds.push(fileResponse.$id);
                         }
-                    );
 
-                    return product;
-                } catch (error) {
-                    throw new Error(`Product creation failed: ${error.message}`);
-                }
-            }
-
-            async getProducts(filters = {}) {
-                try {
-                    const queries = [Query.orderDesc('$createdAt')];
-                    
-                    if (filters.category) {
-                        queries.push(Query.equal('category', filters.category));
-                    }
-                    
-                    if (filters.status) {
-                        queries.push(Query.equal('status', filters.status));
-                    }
-
-                    if (filters.limit) {
-                        queries.push(Query.limit(filters.limit));
-                    }
-
-                    const products = await databases.listDocuments(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.products,
-                        queries
-                    );
-
-                    // Add image URLs to products
-                    products.documents = products.documents.map(product => ({
-                        ...product,
-                        imageUrls: product.images?.map(imageId => this.getImageUrl(imageId)) || []
-                    }));
-
-                    return products;
-                } catch (error) {
-                    throw new Error(`Failed to fetch products: ${error.message}`);
-                }
-            }
-
-            async updateProduct(productId, updateData, newImages = []) {
-                try {
-                    const newImageIds = [];
-                    for (const file of newImages) {
-                        const fileResponse = await storage.createFile(
-                            APPWRITE_CONFIG.bucketId,
+                        const product = await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
                             ID.unique(),
-                            file
+                            {
+                                name: productData.name,
+                                description: productData.description,
+                                price: parseInt(productData.price),
+                                category: productData.category,
+                                status: productData.status || "active",
+                                images: imageIds,
+                                $createdAt: new Date().toISOString(),
+                                $updatedAt: new Date().toISOString()
+                            }
                         );
-                        newImageIds.push(fileResponse.$id);
+
+                        return product;
+                    } catch (error) {
+                        throw new Error(
+                            `Product creation failed: ${error.message}`
+                        );
                     }
-
-                    const existingImages = updateData.existingImages || [];
-                    const allImages = [...existingImages, ...newImageIds];
-
-                    const product = await databases.updateDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.products,
-                        productId,
-                        {
-                            name: updateData.name,
-                            description: updateData.description,
-                            price: parseInt(updateData.price),
-                            category: updateData.category,
-                            status: updateData.status,
-                            images: allImages,
-                            $updatedAt: new Date().toISOString()
-                        }
-                    );
-
-                    return product;
-                } catch (error) {
-                    throw new Error(`Product update failed: ${error.message}`);
                 }
-            }
 
-            async deleteProduct(productId) {
-                try {
-                    const product = await databases.getDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.products,
-                        productId
-                    );
+                async getProducts(filters = {}) {
+                    try {
+                        const queries = [Query.orderDesc("$createdAt")];
 
-                    if (product.images && product.images.length > 0) {
-                        for (const imageId of product.images) {
-                            try {
-                                await storage.deleteFile(APPWRITE_CONFIG.bucketId, imageId);
-                            } catch (imageError) {
-                                console.warn(`Failed to delete image ${imageId}:`, imageError);
+                        if (filters.category) {
+                            queries.push(
+                                Query.equal("category", filters.category)
+                            );
+                        }
+                        if (filters.status) {
+                            queries.push(Query.equal("status", filters.status));
+                        }
+                        if (filters.limit) {
+                            queries.push(Query.limit(filters.limit));
+                        }
+
+                        const products = await databases.listDocuments(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
+                            queries
+                        );
+
+                        // Add image URLs
+                        products.documents = products.documents.map(
+                            product => ({
+                                ...product,
+                                imageUrls:
+                                    product.images?.map(imageId =>
+                                        this.getImageUrl(imageId)
+                                    ) || []
+                            })
+                        );
+
+                        return products;
+                    } catch (error) {
+                        throw new Error(
+                            `Failed to fetch products: ${error.message}`
+                        );
+                    }
+                }
+
+                async updateProduct(productId, updateData, newImages = []) {
+                    try {
+                        const newImageIds = [];
+                        for (const file of newImages) {
+                            const fileResponse = await storage.createFile(
+                                APPWRITE_CONFIG.bucketId,
+                                ID.unique(),
+                                file
+                            );
+                            newImageIds.push(fileResponse.$id);
+                        }
+
+                        const existingImages = updateData.existingImages || [];
+                        const allImages = [...existingImages, ...newImageIds];
+
+                        const product = await databases.updateDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
+                            productId,
+                            {
+                                name: updateData.name,
+                                description: updateData.description,
+                                price: parseInt(updateData.price),
+                                category: updateData.category,
+                                status: updateData.status,
+                                images: allImages,
+                                $updatedAt: new Date().toISOString()
+                            }
+                        );
+
+                        return product;
+                    } catch (error) {
+                        throw new Error(
+                            `Product update failed: ${error.message}`
+                        );
+                    }
+                }
+
+                async deleteProduct(productId) {
+                    try {
+                        const product = await databases.getDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
+                            productId
+                        );
+
+                        if (product.images?.length > 0) {
+                            for (const imageId of product.images) {
+                                try {
+                                    await storage.deleteFile(
+                                        APPWRITE_CONFIG.bucketId,
+                                        imageId
+                                    );
+                                } catch (imageError) {
+                                    console.warn(
+                                        `Failed to delete image ${imageId}:`,
+                                        imageError
+                                    );
+                                }
                             }
                         }
+
+                        await databases.deleteDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
+                            productId
+                        );
+
+                        return true;
+                    } catch (error) {
+                        throw new Error(
+                            `Product deletion failed: ${error.message}`
+                        );
                     }
-
-                    await databases.deleteDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.products,
-                        productId
-                    );
-
-                    return true;
-                } catch (error) {
-                    throw new Error(`Product deletion failed: ${error.message}`);
                 }
-            }
 
-            async getCategories() {
-                try {
-                    return await databases.listDocuments(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.categories,
-                        [Query.orderAsc('$createdAt')]
-                    );
-                } catch (error) {
-                    throw new Error(`Failed to fetch categories: ${error.message}`);
+                async getCategories() {
+                    try {
+                        return await databases.listDocuments(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.categories,
+                            [Query.orderAsc("$createdAt")]
+                        );
+                    } catch (error) {
+                        throw new Error(
+                            `Failed to fetch categories: ${error.message}`
+                        );
+                    }
                 }
-            }
 
-            async createCategory(categoryData) {
-                try {
-                    return await databases.createDocument(
-                        APPWRITE_CONFIG.databaseId,
-                        APPWRITE_CONFIG.collections.categories,
-                        ID.unique(),
-                        {
-                            name: categoryData.name,
-                            description: categoryData.description || '',
-                            color: categoryData.color || '#8B4A87',
-                            display_order: categoryData.display_order || 0,
-                            status: categoryData.status || 'active',
-                            $createdAt: new Date().toISOString()
+                async createCategory(categoryData) {
+                    try {
+                        return await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.categories,
+                            ID.unique(),
+                            {
+                                name: categoryData.name,
+                                description: categoryData.description || "",
+                                color: categoryData.color || "#8B4A87",
+                                display_order: categoryData.display_order || 0,
+                                status: categoryData.status || "active",
+                                $createdAt: new Date().toISOString()
+                            }
+                        );
+                    } catch (error) {
+                        throw new Error(
+                            `Category creation failed: ${error.message}`
+                        );
+                    }
+                }
+
+                async uploadImage(file) {
+                    try {
+                        const fileResponse = await storage.createFile(
+                            APPWRITE_CONFIG.bucketId,
+                            ID.unique(),
+                            file
+                        );
+
+                        return {
+                            id: fileResponse.$id,
+                            url: this.getImageUrl(fileResponse.$id),
+                            name: file.name,
+                            size: file.size
+                        };
+                    } catch (error) {
+                        throw new Error(
+                            `Image upload failed: ${error.message}`
+                        );
+                    }
+                }
+
+                getImageUrl(fileId) {
+                    if (!fileId) return null;
+                    return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/view?project=${APPWRITE_CONFIG.projectId}`;
+                }
+
+                async deleteImage(fileId) {
+                    try {
+                        await storage.deleteFile(
+                            APPWRITE_CONFIG.bucketId,
+                            fileId
+                        );
+                        return true;
+                    } catch (error) {
+                        throw new Error(
+                            `Image deletion failed: ${error.message}`
+                        );
+                    }
+                }
+
+                // ------------------------------
+                // ✅ NEW: Orders support
+                // ------------------------------
+                async getOrders(filters = {}) {
+                    try {
+                        const queries = [Query.orderDesc("$createdAt")];
+
+                        if (filters.status) {
+                            queries.push(Query.equal("status", filters.status));
                         }
-                    );
-                } catch (error) {
-                    throw new Error(`Category creation failed: ${error.message}`);
-                }
-            }
+                        if (filters.service_type) {
+                            queries.push(
+                                Query.equal(
+                                    "service_type",
+                                    filters.service_type
+                                )
+                            );
+                        }
+                        if (filters.limit) {
+                            queries.push(Query.limit(filters.limit));
+                        }
 
-            async uploadImage(file) {
-                try {
-                    const fileResponse = await storage.createFile(
-                        APPWRITE_CONFIG.bucketId,
-                        ID.unique(),
-                        file
-                    );
+                        const orders = await databases.listDocuments(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.orders,
+                            queries
+                        );
 
-                    return {
-                        id: fileResponse.$id,
-                        url: this.getImageUrl(fileResponse.$id),
-                        name: file.name,
-                        size: file.size
-                    };
-                } catch (error) {
-                    throw new Error(`Image upload failed: ${error.message}`);
-                }
-            }
-
-            getImageUrl(fileId) {
-                if (!fileId) return null;
-                return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/view?project=${APPWRITE_CONFIG.projectId}`;
-            }
-
-            async deleteImage(fileId) {
-                try {
-                    await storage.deleteFile(APPWRITE_CONFIG.bucketId, fileId);
-                    return true;
-                } catch (error) {
-                    throw new Error(`Image deletion failed: ${error.message}`);
-                }
-            }
-
-            // Initialize default categories if none exist
-            async initializeDefaultData() {
-                try {
-                    const categories = await this.getCategories();
-                    
-                    if (categories.total === 0) {
-                        console.log('Creating default categories...');
-                        
-                        await this.createCategory({
-                            name: 'Premium',
-                            description: 'High-quality cakes with premium ingredients',
-                            color: '#D4A574',
-                            display_order: 1
-                        });
-                        
-                        await this.createCategory({
-                            name: 'VIP',
-                            description: 'Luxury cakes with premium decorations',
-                            color: '#8B4A87',
-                            display_order: 2
-                        });
-                        
-                        await this.createCategory({
-                            name: 'Special',
-                            description: 'Limited edition and special occasion cakes',
-                            color: '#e74c3c',
-                            display_order: 3
-                        });
-                        
-                        console.log('Default categories created successfully');
+                        return orders;
+                    } catch (error) {
+                        throw new Error(
+                            `Failed to fetch orders: ${error.message}`
+                        );
                     }
+                }
+
+                async updateOrder(orderId, updateData) {
+                    try {
+                        return await databases.updateDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.orders,
+                            orderId,
+                            {
+                                ...updateData,
+                                $updatedAt: new Date().toISOString()
+                            }
+                        );
+                    } catch (error) {
+                        throw new Error(
+                            `Failed to update order: ${error.message}`
+                        );
+                    }
+                }
+
+                async deleteOrder(orderId) {
+                    try {
+                        await databases.deleteDocument(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.orders,
+                            orderId
+                        );
+                        return true;
+                    } catch (error) {
+                        throw new Error(
+                            `Order deletion failed: ${error.message}`
+                        );
+                    }
+                }
+
+                // Initialize default categories if none exist
+                async initializeDefaultData() {
+                    try {
+                        const categories = await this.getCategories();
+                        if (categories.total === 0) {
+                            console.log("Creating default categories...");
+                            await this.createCategory({
+                                name: "Premium",
+                                description:
+                                    "High-quality cakes with premium ingredients",
+                                color: "#D4A574",
+                                display_order: 1
+                            });
+                            await this.createCategory({
+                                name: "VIP",
+                                description:
+                                    "Luxury cakes with premium decorations",
+                                color: "#8B4A87",
+                                display_order: 2
+                            });
+                            await this.createCategory({
+                                name: "Special",
+                                description:
+                                    "Limited edition and special occasion cakes",
+                                color: "#e74c3c",
+                                display_order: 3
+                            });
+                            console.log(
+                                "Default categories created successfully"
+                            );
+                        }
+                    } catch (error) {
+                        console.error(
+                            "Error initializing default data:",
+                            error
+                        );
+                    }
+                }
+            }
+
+            // Initialize services
+            const authService = new AuthService();
+            const dbService = new DatabaseService();
+
+            // Expose to global scope
+            window.APPWRITE_CONFIG = APPWRITE_CONFIG;
+            window.dbService = dbService;
+            window.authService = authService;
+            window.appwriteClient = client;
+            window.appwriteAccount = account;
+            window.appwriteDatabases = databases;
+            window.appwriteStorage = storage;
+            window.Query = Query;
+            window.Permission = Permission;
+            window.Role = Role;
+            window.ID = ID;
+
+            // Check authentication and initialize
+            window.addEventListener("DOMContentLoaded", async () => {
+                try {
+                    const authState = await authService.checkAuthState();
+
+                    if (!authState.authenticated) {
+                        console.log(
+                            "User not authenticated, redirecting to login"
+                        );
+                        window.location.href = "login.html";
+                        return;
+                    }
+
+                    console.log("User authenticated:", authState.user);
+
+                    // Initialize default data
+                    await dbService.initializeDefaultData();
+                    console.log("Appwrite services initialized successfully");
+
+                    // Dispatch custom event to notify Alpine components
+                    window.dispatchEvent(
+                        new CustomEvent("appwrite-ready", {
+                            detail: { user: authState.user }
+                        })
+                    );
                 } catch (error) {
-                    console.error('Error initializing default data:', error);
+                    console.error("Failed to initialize services:", error);
+                    // Still allow access if authentication fails, but show error
+                    window.dispatchEvent(
+                        new CustomEvent("appwrite-error", {
+                            detail: { error: error.message }
+                        })
+                    );
                 }
-            }
-        }
-
-        // Initialize services
-        const authService = new AuthService();
-        const dbService = new DatabaseService();
-        
-        // Expose to global scope
-        window.APPWRITE_CONFIG = APPWRITE_CONFIG;
-        window.dbService = dbService;
-        window.authService = authService;
-        window.appwriteClient = client;
-        window.appwriteAccount = account;
-        window.appwriteDatabases = databases;
-        window.appwriteStorage = storage;
-        window.Query = Query;
-        window.Permission = Permission;
-        window.Role = Role;
-        window.ID = ID;
-
-        // Check authentication and initialize
-        window.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const authState = await authService.checkAuthState();
-                
-                if (!authState.authenticated) {
-                    console.log('User not authenticated, redirecting to login');
-                    window.location.href = 'login.html';
-                    return;
-                }
-                
-                console.log('User authenticated:', authState.user);
-                
-                // Initialize default data
-                await dbService.initializeDefaultData();
-                console.log('Appwrite services initialized successfully');
-                
-                // Dispatch custom event to notify Alpine components
-                window.dispatchEvent(new CustomEvent('appwrite-ready', {
-                    detail: { user: authState.user }
-                }));
-                
-            } catch (error) {
-                console.error('Failed to initialize services:', error);
-                // Still allow access if authentication fails, but show error
-                window.dispatchEvent(new CustomEvent('appwrite-error', {
-                    detail: { error: error.message }
-                }));
-            }
-        });
-    </script>
-   
-</head>
-<body x-data="adminDashboard()">
-    <!-- Authentication Error (shows before sidebar if auth fails) -->
-    <div x-show="authError" class="auth-error">
-        <div class="auth-error-icon">🔒</div>
-        <h3 class="auth-error-title">Authentication Required</h3>
-        <p class="auth-error-message">You need to be logged in to access the admin dashboard.</p>
-        <div>
-            <button @click="goToLogin" class="login-btn">
-                <i class="fas fa-sign-in-alt"></i>
-                Go to Login
-            </button>
+            });
+        </script>
+    </head>
+    <body x-data="adminDashboard()">
+        <!-- Authentication Error (shows before sidebar if auth fails) -->
+        <div x-show="authError" class="auth-error">
+            <div class="auth-error-icon">🔒</div>
+            <h3 class="auth-error-title">Authentication Required</h3>
+            <p class="auth-error-message">
+                You need to be logged in to access the admin dashboard.
+            </p>
+            <div>
+                <button @click="goToLogin" class="login-btn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Go to Login
+                </button>
+            </div>
         </div>
-    </div>
 
-    <!-- Main Dashboard (only shows if authenticated) -->
-    <div x-show="!authError">
-        <!-- Sidebar -->
-        <nav class="sidebar" :class="{ 'collapsed': !sidebarOpen, 'mobile-open': sidebarOpen }">
-            <div class="sidebar-header">
-                <a href="#" class="sidebar-logo" @click="setActiveSection('dashboard')">
-                    <div class="sidebar-logo-icon">🧁</div>
-                    <div class="sidebar-logo-text">TEETEE FABULOUS</div>
-                </a>
-            </div>
-            
-            <div class="sidebar-nav">
-                <div class="nav-section">
-                    <div class="nav-section-title">Main</div>
-                    <a href="#dashboard" class="nav-item" :class="{ 'active': activeSection === 'dashboard' }" @click="setActiveSection('dashboard')">
-                        <i class="fas fa-tachometer-alt"></i>
-                        Dashboard
-                    </a>
-                    <a href="#products" class="nav-item" :class="{ 'active': activeSection === 'products' }" @click="setActiveSection('products')">
-                        <i class="fas fa-birthday-cake"></i>
-                        Products
-                    </a>
-                    <a href="#orders" class="nav-item" :class="{ 'active': activeSection === 'orders' }" @click="setActiveSection('orders')">
-                        <i class="fas fa-shopping-cart"></i>
-                        Orders
-                    </a>
-                    <a href="#customers" class="nav-item" :class="{ 'active': activeSection === 'customers' }" @click="setActiveSection('customers')">
-                        <i class="fas fa-users"></i>
-                        Customers
+        <!-- Main Dashboard (only shows if authenticated) -->
+        <div x-show="!authError">
+            <!-- Sidebar -->
+            <nav
+                class="sidebar"
+                :class="{ 'collapsed': !sidebarOpen, 'mobile-open': sidebarOpen }"
+            >
+                <div class="sidebar-header">
+                    <a
+                        href="#"
+                        class="sidebar-logo"
+                        @click="setActiveSection('dashboard')"
+                    >
+                        <div class="sidebar-logo-icon">🧁</div>
+                        <div class="sidebar-logo-text">TEETEE FABULOUS</div>
                     </a>
                 </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Content</div>
-                    <a href="#content" class="nav-item" :class="{ 'active': activeSection === 'content' }" @click="setActiveSection('content')">
-                        <i class="fas fa-edit"></i>
-                        Site Content
-                    </a>
-                    <a href="#media" class="nav-item" :class="{ 'active': activeSection === 'media' }" @click="setActiveSection('media')">
-                        <i class="fas fa-images"></i>
-                        Media Library
-                    </a>
-                    <a href="#categories" class="nav-item" :class="{ 'active': activeSection === 'categories' }" @click="setActiveSection('categories')">
-                        <i class="fas fa-tags"></i>
-                        Categories
-                    </a>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Settings</div>
-                    <a href="#settings" class="nav-item" :class="{ 'active': activeSection === 'settings' }" @click="setActiveSection('settings')">
-                        <i class="fas fa-cog"></i>
-                        Settings
-                    </a>
-                    <a href="#analytics" class="nav-item" :class="{ 'active': activeSection === 'analytics' }" @click="setActiveSection('analytics')">
-                        <i class="fas fa-chart-bar"></i>
-                        Analytics
-                    </a>
-                </div>
-            </div>
-        </nav>
 
-        <!-- Sidebar Overlay for mobile -->
-        <div class="sidebar-overlay" :class="{ 'show': sidebarOpen }" @click="sidebarOpen = false"></div>
-        
-        <!-- Main Content -->
-        <main class="main-content" :class="{ 'sidebar-collapsed': !sidebarOpen }">
-            <!-- Header -->
-            <header class="header">
-                <div class="header-left">
-                    <button class="sidebar-toggle" @click="toggleSidebar">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <h1 class="page-title" x-text="getPageTitle()"></h1>
-                </div>
-                
-                <div class="header-right">
-                    <div class="user-menu" x-data="{ open: false }">
-                        <div class="user-avatar" @click="open = !open" x-text="currentUser?.name?.charAt(0) || 'A'"></div>
-                        
-                        <div class="user-dropdown" x-show="open" @click.away="open = false" x-transition>
-                            <div style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #6b7280;">
-                                <div style="font-weight: 600; color: #374151;" x-text="currentUser?.name || 'Admin User'"></div>
-                                <div x-text="currentUser?.email || 'admin@example.com'"></div>
-                            </div>
-                            <a href="#" class="dropdown-item">
-                                <i class="fas fa-user"></i>
-                                Profile
-                            </a>
-                            <a href="#" class="dropdown-item" @click="setActiveSection('settings')">
-                                <i class="fas fa-cog"></i>
-                                Settings
-                            </a>
-                            <hr style="margin: 8px 0; border: none; border-top: 1px solid #e2e8f0;">
-                            <a href="#" class="dropdown-item danger" @click="handleLogout">
-                                <i class="fas fa-sign-out-alt"></i>
-                                Logout
-                            </a>
-                        </div>
+                <div class="sidebar-nav">
+                    <div class="nav-section">
+                        <div class="nav-section-title">Main</div>
+                        <a
+                            href="#dashboard"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'dashboard' }"
+                            @click="setActiveSection('dashboard')"
+                        >
+                            <i class="fas fa-tachometer-alt"></i>
+                            Dashboard
+                        </a>
+                        <a
+                            href="#products"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'products' }"
+                            @click="setActiveSection('products')"
+                        >
+                            <i class="fas fa-birthday-cake"></i>
+                            Products
+                        </a>
+                        <a
+                            href="#orders"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'orders' }"
+                            @click="setActiveSection('orders')"
+                        >
+                            <i class="fas fa-shopping-cart"></i>
+                            Orders
+                        </a>
+                        <a
+                            href="#customers"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'customers' }"
+                            @click="setActiveSection('customers')"
+                        >
+                            <i class="fas fa-users"></i>
+                            Customers
+                        </a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Content</div>
+                        <a
+                            href="#content"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'content' }"
+                            @click="setActiveSection('content')"
+                        >
+                            <i class="fas fa-edit"></i>
+                            Site Content
+                        </a>
+                        <a
+                            href="#media"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'media' }"
+                            @click="setActiveSection('media')"
+                        >
+                            <i class="fas fa-images"></i>
+                            Media Library
+                        </a>
+                        <a
+                            href="#categories"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'categories' }"
+                            @click="setActiveSection('categories')"
+                        >
+                            <i class="fas fa-tags"></i>
+                            Categories
+                        </a>
+                    </div>
+
+                    <div class="nav-section">
+                        <div class="nav-section-title">Settings</div>
+                        <a
+                            href="#settings"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'settings' }"
+                            @click="setActiveSection('settings')"
+                        >
+                            <i class="fas fa-cog"></i>
+                            Settings
+                        </a>
+                        <a
+                            href="#analytics"
+                            class="nav-item"
+                            :class="{ 'active': activeSection === 'analytics' }"
+                            @click="setActiveSection('analytics')"
+                        >
+                            <i class="fas fa-chart-bar"></i>
+                            Analytics
+                        </a>
                     </div>
                 </div>
-            </header>
-            
-            <!-- Dashboard Content Container -->
-            <div class="dashboard-content">
-                <!-- Loading State -->
-                <div x-show="loading" class="loading-container">
-                    <div class="loading-spinner"></div>
-                </div>
-                
-                <!-- Service Loading Error -->
-                <div x-show="serviceError && !loading" style="text-align: center; padding: 60px 20px;">
-                    <div style="font-size: 48px; margin-bottom: 20px; color: #ef4444;">⚠️</div>
-                    <h3 style="font-size: 20px; margin-bottom: 12px; color: #374151;">Services Not Available</h3>
-                    <p style="color: #6b7280; margin-bottom: 20px;" x-text="serviceErrorMessage"></p>
-                    <button @click="retryServiceConnection" class="retry-btn">
-                        <i class="fas fa-refresh"></i>
-                        Retry Connection
-                    </button>
-                </div>
-                
-                <!-- Main Dashboard -->
-                <div x-show="activeSection === 'dashboard' && !loading && !serviceError">
-                    <!-- Stats Grid -->
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-header">
-                                <div class="stat-title">Total Products</div>
-                                <div class="stat-icon products">
-                                    <i class="fas fa-birthday-cake"></i>
+            </nav>
+
+            <!-- Sidebar Overlay for mobile -->
+            <div
+                class="sidebar-overlay"
+                :class="{ 'show': sidebarOpen }"
+                @click="sidebarOpen = false"
+            ></div>
+
+            <!-- Main Content -->
+            <main
+                class="main-content"
+                :class="{ 'sidebar-collapsed': !sidebarOpen }"
+            >
+                <!-- Header -->
+                <header class="header">
+                    <div class="header-left">
+                        <button class="sidebar-toggle" @click="toggleSidebar">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <h1 class="page-title" x-text="getPageTitle()"></h1>
+                    </div>
+
+                    <div class="header-right">
+                        <div class="user-menu" x-data="{ open: false }">
+                            <div
+                                class="user-avatar"
+                                @click="open = !open"
+                                x-text="currentUser?.name?.charAt(0) || 'A'"
+                            ></div>
+
+                            <div
+                                class="user-dropdown"
+                                x-show="open"
+                                @click.away="open = false"
+                                x-transition
+                            >
+                                <div
+                                    style="
+                                        padding: 12px 16px;
+                                        border-bottom: 1px solid #e2e8f0;
+                                        font-size: 14px;
+                                        color: #6b7280;
+                                    "
+                                >
+                                    <div
+                                        style="font-weight: 600; color: #374151"
+                                        x-text="currentUser?.name || 'Admin User'"
+                                    ></div>
+                                    <div
+                                        x-text="currentUser?.email || 'admin@example.com'"
+                                    ></div>
                                 </div>
-                            </div>
-                            <div class="stat-value" x-text="stats.products"></div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                Available in inventory
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-header">
-                                <div class="stat-title">Active Categories</div>
-                                <div class="stat-icon orders">
-                                    <i class="fas fa-tags"></i>
-                                </div>
-                            </div>
-                            <div class="stat-value" x-text="stats.categories"></div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                Product categories
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-header">
-                                <div class="stat-title">Revenue</div>
-                                <div class="stat-icon revenue">
-                                    <i class="fas fa-naira-sign"></i>
-                                </div>
-                            </div>
-                            <div class="stat-value">₦<span x-text="stats.revenue.toLocaleString()"></span></div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                Monthly target
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card">
-                            <div class="stat-header">
-                                <div class="stat-title">System Status</div>
-                                <div class="stat-icon customers">
-                                    <i class="fas fa-check-circle"></i>
-                                </div>
-                            </div>
-                            <div class="stat-value" style="font-size: 24px; color: #22c55e;">Online</div>
-                            <div class="stat-change positive">
-                                <i class="fas fa-arrow-up"></i>
-                                All systems operational
+                                <a href="#" class="dropdown-item">
+                                    <i class="fas fa-user"></i>
+                                    Profile
+                                </a>
+                                <a
+                                    href="#"
+                                    class="dropdown-item"
+                                    @click="setActiveSection('settings')"
+                                >
+                                    <i class="fas fa-cog"></i>
+                                    Settings
+                                </a>
+                                <hr
+                                    style="
+                                        margin: 8px 0;
+                                        border: none;
+                                        border-top: 1px solid #e2e8f0;
+                                    "
+                                />
+                                <a
+                                    href="#"
+                                    class="dropdown-item danger"
+                                    @click="handleLogout"
+                                >
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    Logout
+                                </a>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Quick Actions -->
-                    <div class="quick-actions">
-                        <h2 class="quick-actions-title">Quick Actions</h2>
-                        <div class="actions-grid">
-                            <div class="action-button" @click="setActiveSection('products')">
-                                <div class="action-icon">
-                                    <i class="fas fa-plus"></i>
-                                </div>
-                                <div class="action-text">
-                                    <div class="action-title">Add New Cake</div>
-                                    <div class="action-desc">Create a new product</div>
-                                </div>
-                            </div>
-                            
-                            <div class="action-button" @click="setActiveSection('orders')">
-                                <div class="action-icon">
-                                    <i class="fas fa-list"></i>
-                                </div>
-                                <div class="action-text">
-                                    <div class="action-title">View Orders</div>
-                                    <div class="action-desc">Manage customer orders</div>
-                                </div>
-                            </div>
-                            
-                            <div class="action-button" @click="setActiveSection('content')">
-                                <div class="action-icon">
-                                    <i class="fas fa-edit"></i>
-                                </div>
-                                <div class="action-text">
-                                    <div class="action-title">Edit Content</div>
-                                    <div class="action-desc">Update site content</div>
-                                </div>
-                            </div>
-                            
-                            <div class="action-button" @click="setActiveSection('analytics')">
-                                <div class="action-icon">
-                                    <i class="fas fa-chart-line"></i>
-                                </div>
-                                <div class="action-text">
-                                    <div class="action-title">View Analytics</div>
-                                    <div class="action-desc">Check performance</div>
-                                </div>
-                            </div>
-                        </div>
+                </header>
+
+                <!-- Dashboard Content Container -->
+                <div class="dashboard-content">
+                    <!-- Loading State -->
+                    <div x-show="loading" class="loading-container">
+                        <div class="loading-spinner"></div>
                     </div>
-                    
-                    <!-- Recent Activity -->
-                    <div class="recent-activity">
-                        <h2 class="activity-title">Recent Activity</h2>
-                        <div class="activity-list">
-                            <template x-for="activity in recentActivity" :key="activity.id">
-                                <div class="activity-item">
-                                    <div class="activity-icon" :class="activity.type">
-                                        <i :class="activity.icon"></i>
+
+                    <!-- Service Loading Error -->
+                    <div
+                        x-show="serviceError && !loading"
+                        style="text-align: center; padding: 60px 20px"
+                    >
+                        <div
+                            style="
+                                font-size: 48px;
+                                margin-bottom: 20px;
+                                color: #ef4444;
+                            "
+                        >
+                            ⚠️
+                        </div>
+                        <h3
+                            style="
+                                font-size: 20px;
+                                margin-bottom: 12px;
+                                color: #374151;
+                            "
+                        >
+                            Services Not Available
+                        </h3>
+                        <p
+                            style="color: #6b7280; margin-bottom: 20px"
+                            x-text="serviceErrorMessage"
+                        ></p>
+                        <button
+                            @click="retryServiceConnection"
+                            class="retry-btn"
+                        >
+                            <i class="fas fa-refresh"></i>
+                            Retry Connection
+                        </button>
+                    </div>
+
+                    <!-- Main Dashboard -->
+                    <div
+                        x-show="activeSection === 'dashboard' && !loading && !serviceError"
+                    >
+                        <!-- Stats Grid -->
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <div class="stat-title">Total Products</div>
+                                    <div class="stat-icon products">
+                                        <i class="fas fa-birthday-cake"></i>
                                     </div>
-                                    <div class="activity-content">
-                                        <div class="activity-text" x-text="activity.text"></div>
-                                        <div class="activity-time" x-text="activity.time"></div>
+                                </div>
+                                <div
+                                    class="stat-value"
+                                    x-text="stats.products"
+                                ></div>
+                                <div class="stat-change positive">
+                                    <i class="fas fa-arrow-up"></i>
+                                    Available in inventory
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <div class="stat-title">
+                                        Active Categories
+                                    </div>
+                                    <div class="stat-icon orders">
+                                        <i class="fas fa-tags"></i>
                                     </div>
                                 </div>
-                            </template>
+                                <div
+                                    class="stat-value"
+                                    x-text="stats.categories"
+                                ></div>
+                                <div class="stat-change positive">
+                                    <i class="fas fa-arrow-up"></i>
+                                    Product categories
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <div class="stat-title">Revenue</div>
+                                    <div class="stat-icon revenue">
+                                        <i class="fas fa-naira-sign"></i>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    ₦<span
+                                        x-text="stats.revenue.toLocaleString()"
+                                    ></span>
+                                </div>
+                                <div class="stat-change positive">
+                                    <i class="fas fa-arrow-up"></i>
+                                    Monthly target
+                                </div>
+                            </div>
+
+                            <div class="stat-card">
+                                <div class="stat-header">
+                                    <div class="stat-title">System Status</div>
+                                    <div class="stat-icon customers">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
+                                </div>
+                                <div
+                                    class="stat-value"
+                                    style="font-size: 24px; color: #22c55e"
+                                >
+                                    Online
+                                </div>
+                                <div class="stat-change positive">
+                                    <i class="fas fa-arrow-up"></i>
+                                    All systems operational
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="quick-actions">
+                            <h2 class="quick-actions-title">Quick Actions</h2>
+                            <div class="actions-grid">
+                                <div
+                                    class="action-button"
+                                    @click="setActiveSection('products')"
+                                >
+                                    <div class="action-icon">
+                                        <i class="fas fa-plus"></i>
+                                    </div>
+                                    <div class="action-text">
+                                        <div class="action-title">
+                                            Add New Cake
+                                        </div>
+                                        <div class="action-desc">
+                                            Create a new product
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="action-button"
+                                    @click="setActiveSection('orders')"
+                                >
+                                    <div class="action-icon">
+                                        <i class="fas fa-list"></i>
+                                    </div>
+                                    <div class="action-text">
+                                        <div class="action-title">
+                                            View Orders
+                                        </div>
+                                        <div class="action-desc">
+                                            Manage customer orders
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="action-button"
+                                    @click="setActiveSection('content')"
+                                >
+                                    <div class="action-icon">
+                                        <i class="fas fa-edit"></i>
+                                    </div>
+                                    <div class="action-text">
+                                        <div class="action-title">
+                                            Edit Content
+                                        </div>
+                                        <div class="action-desc">
+                                            Update site content
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="action-button"
+                                    @click="setActiveSection('analytics')"
+                                >
+                                    <div class="action-icon">
+                                        <i class="fas fa-chart-line"></i>
+                                    </div>
+                                    <div class="action-text">
+                                        <div class="action-title">
+                                            View Analytics
+                                        </div>
+                                        <div class="action-desc">
+                                            Check performance
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity -->
+                        <div class="recent-activity">
+                            <h2 class="activity-title">Recent Activity</h2>
+                            <div class="activity-list">
+                                <template
+                                    x-for="activity in recentActivity"
+                                    :key="activity.id"
+                                >
+                                    <div class="activity-item">
+                                        <div
+                                            class="activity-icon"
+                                            :class="activity.type"
+                                        >
+                                            <i :class="activity.icon"></i>
+                                        </div>
+                                        <div class="activity-content">
+                                            <div
+                                                class="activity-text"
+                                                x-text="activity.text"
+                                            ></div>
+                                            <div
+                                                class="activity-time"
+                                                x-text="activity.time"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Dynamic Content Container -->
+                    <div
+                        x-show="activeSection !== 'dashboard' && !loading && !serviceError"
+                        x-html="dynamicContent"
+                    ></div>
                 </div>
-                           
-                <!-- Dynamic Content Container -->
-                <div x-show="activeSection !== 'dashboard' && !loading && !serviceError" x-html="dynamicContent"></div>
-            </div>
-        </main>
-    </div>
-   <script src="js/dashboard.js"></script>
+            </main>
+        </div>
+        <script src="js/dashboard.js"></script>
     </body>
 </html>

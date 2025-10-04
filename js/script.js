@@ -974,29 +974,43 @@ function validateContactForm(data) {
     return true;
 }
 
-function submitContactForm(data) {
+async function submitContactForm(data) {
     var submitBtn = $('#submitBtn');
     var originalHtml = submitBtn.html();
     
     submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Sending...').prop('disabled', true);
-    
-    setTimeout(function() {
-        submitBtn.html('<i class="fas fa-check"></i> Message Sent!');
-        showNotification('Thank you! Your message has been sent successfully. We will get back to you soon!', 'success');
-        
+
+    try {
+        // Map to your Appwrite schema
+        const orderData = {
+            customer_name: data.name,
+            customer_email: data.email,
+            customer_phone: data.phone,
+            service_type: data.service, // enum [cake-order, custom-design, bulk-order, consultation, other]
+            message: data.message,
+            status: 'pending', // default new order
+            notes: '' // optional
+        };
+
+        const order = await window.orderService.createOrder(orderData);
+
+        showNotification('Order submitted successfully! Reference: ' + order.$id, 'success');
+
         $('#contactForm')[0].reset();
-        
+
         if (data.service === 'cake-order') {
-            setTimeout(function() {
-                clearCart();
-                showNotification('Order submitted! Your cart has been cleared.', 'info');
-            }, 2000);
+            clearCart();
+            showNotification('Order submitted! Your cart has been cleared.', 'info');
         }
-        
-        setTimeout(function() {
+
+    } catch (error) {
+        console.error('Order submission failed:', error);
+        showNotification('Failed to place order. Please try again.', 'error');
+    } finally {
+        setTimeout(() => {
             submitBtn.html(originalHtml).prop('disabled', false);
-        }, 3000);
-    }, 2000);
+        }, 1500);
+    }
 }
 
 // ===== NEWSLETTER =====

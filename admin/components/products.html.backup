@@ -1,4 +1,3 @@
-
 <!-- Enhanced Products Management Component -->
 <div x-data="{
     // State

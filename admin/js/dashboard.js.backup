@@ -236,3 +236,178 @@ function adminDashboard() {
         
         // Make adminDashboard available globally for debugging
         window.adminDashboard = adminDashboard;
+        
+        function ordersComponent() {
+  return {
+    orders: [],
+    filteredOrders: [],
+    loading: true,
+    searchQuery: '',
+    selectedStatus: '',
+    selectedService: '',
+    sortBy: 'newest',
+    viewMode: 'table',
+    page: 1,
+    perPage: 10,
+    editingOrder: null,
+    showEditModal: false,
+
+    // Computed
+    get totalPages() { return Math.ceil(this.filteredOrders.length / this.perPage) || 1 },
+    get startIndex() { return (this.page - 1) * this.perPage },
+    get endIndex() { return this.startIndex + this.perPage },
+    get paginatedOrders() { return this.filteredOrders.slice(this.startIndex, this.endIndex) },
+
+    async init() { this.loadOrders(); },
+
+    async loadOrders() {
+      try {
+        this.loading = true;
+        const res = await window.dbService?.getOrders();
+        this.orders = res?.documents || [];
+        this.orders = this.orders.map(o => ({
+          ...o,
+          status: o.status || 'pending',
+          notes: o.notes || ''
+        }));
+        this.applyFilters();
+      } catch (err) {
+        console.error('Failed to load orders:', err);
+        this.showNotification('Failed to load orders','error');
+      } finally { this.loading = false; }
+    },
+
+    applyFilters() {
+      let list = [...this.orders];
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        list = list.filter(o =>
+          (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
+          (o.customer_email && o.customer_email.toLowerCase().includes(q)) ||
+          (o.customer_phone && o.customer_phone.toLowerCase().includes(q)) ||
+          (o.message && o.message.toLowerCase().includes(q))
+        );
+      }
+      if (this.selectedStatus) list = list.filter(o => o.status === this.selectedStatus);
+      if (this.selectedService) list = list.filter(o => o.service_type === this.selectedService);
+
+      switch(this.sortBy) {
+        case 'newest': list.sort((a,b)=> new Date(b.$createdAt)-new Date(a.$createdAt)); break;
+        case 'oldest': list.sort((a,b)=> new Date(a.$createdAt)-new Date(b.$createdAt)); break;
+        case 'name': list.sort((a,b)=> (a.customer_name||'').localeCompare(b.customer_name||'')); break;
+      }
+      this.filteredOrders = list;
+      if (this.page > this.totalPages) this.page = 1;
+    },
+
+    clearFilters() {
+      this.searchQuery=''; 
+      this.selectedStatus=''; 
+      this.selectedService=''; 
+      this.sortBy='newest';
+      this.applyFilters();
+    },
+
+    formatDate(dateStr) {
+      try {
+        return new Date(dateStr).toLocaleString('en-GB',{
+          day:'numeric',month:'short',year:'numeric',
+          hour:'2-digit',minute:'2-digit'
+        });
+      } catch(e){ return dateStr||'' }
+    },
+
+    formatService(s) {
+      if (!s) return '';
+      const map = {
+        'cake-order':'Cake Order',
+        'custom-design':'Custom Design',
+        'bulk-order':'Bulk Order',
+        'consultation':'Consultation',
+        'other':'Other'
+      };
+      return map[s]||s;
+    },
+
+    async changeStatus(order) {
+      try {
+        await window.dbService?.updateOrder(order.$id,{status:order.status,notes:order.notes||''});
+        this.showNotification('Order status updated','success');
+        await this.loadOrders();
+      } catch(err){ this.showNotification('Failed to update order','error'); }
+    },
+
+    openEdit(order){ this.editingOrder=JSON.parse(JSON.stringify(order)); this.showEditModal=true; },
+    closeEdit(){ this.editingOrder=null; this.showEditModal=false; },
+
+    async saveEdit() {
+      if (!this.editingOrder?.$id) return;
+      try {
+        await window.dbService?.updateOrder(this.editingOrder.$id,{
+          status:this.editingOrder.status||'pending',
+          notes:this.editingOrder.notes||''
+        });
+        this.showNotification('Order updated successfully','success');
+        this.closeEdit(); await this.loadOrders();
+      } catch(err){ this.showNotification('Failed to save changes','error'); }
+    },
+
+    openMessageInNewTab(order) {
+      const content = [
+        'Customer: '+(order.customer_name||''),
+        'Email: '+(order.customer_email||''),
+        'Phone: '+(order.customer_phone||''),
+        'Service: '+this.formatService(order.service_type)||'',
+        'Status: '+(order.status||''),
+        'Notes: '+(order.notes||''),
+        '',
+        'Message:',
+        order.message||''
+      ].join('\n');
+      const w=window.open('','_blank'); 
+      if(w){ 
+        const pre=w.document.createElement('pre'); 
+        pre.style.whiteSpace='pre-wrap'; 
+        pre.style.padding='20px'; 
+        pre.textContent=content; 
+        w.document.body.appendChild(pre); 
+      }
+    },
+
+    exportCsv() {
+      const rows=[['Customer','Email','Phone','Service','Status','Notes','Message','Date'],
+        ...this.filteredOrders.map(o=>[
+          o.customer_name||'',
+          o.customer_email||'',
+          o.customer_phone||'',
+          this.formatService(o.service_type)||'',
+          o.status||'',
+          o.notes||'',
+          (o.message||'').replace(/\n/g,' '),
+          this.formatDate(o.$createdAt)||''
+        ])
+      ];
+      const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const link=document.createElement('a');
+      link.href=URL.createObjectURL(blob);
+      link.download='orders.csv';
+      link.click();
+    },
+
+    showNotification(msg, type='info') {
+      const toast=document.createElement('div');
+      toast.className=`toast toast-${type}`;
+      toast.innerHTML=`
+        <i class='fas ${type==='success'?'fa-check-circle':type==='error'?'fa-exclamation-circle':'fa-info-circle'}'></i>
+        <span>${msg}</span>
+        <button class='toast-close' onclick='this.parentElement.remove()'>
+          <i class='fas fa-times'></i>
+        </button>
+      `;
+      document.body.appendChild(toast);
+      setTimeout(()=>toast.remove(),5000);
+    }
+  }
+}
+window.ordersComponent = ordersComponent;
