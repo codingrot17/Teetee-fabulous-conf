@@ -1,5 +1,4 @@
 <!-- orders.html (ENHANCED) -->
-<!-- Assumptions: Alpine.js is available globally and window.dbService implements getOrders(), updateOrder(id, data), deleteOrder(id) -->
 <div x-data="ordersComponent()" x-init="init()" class="orders-root">
     <!-- Header -->
     <header class="header-gradient">
@@ -67,8 +66,11 @@
                     class="filter-select"
                 >
                     <option value="">All Services</option>
-                    <option value="delivery">Delivery</option>
-                    <option value="pickup">Pickup</option>
+                    <option value="cake-order">Cake Order</option>
+                    <option value="custom-design">Custom Design</option>
+                    <option value="bulk-order">Bulk Order</option>
+                    <option value="consultation">Consultation</option>
+                    <option value="other">Other</option>
                 </select>
             </div>
 
@@ -209,6 +211,13 @@
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <button
+                                        @click="openView(order)"
+                                        class="btn-sm btn-view"
+                                    >
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+
+                                    <button
                                         @click="toggleStatus(order)"
                                         class="btn-sm btn-toggle"
                                         :title="order.status === 'pending' ? 'Mark completed' : 'Mark pending'"
@@ -294,10 +303,17 @@
                             ></span>
                             <div class="card-actions">
                                 <button
+                                    @click="openView(order)"
+                                    class="btn-sm btn-view"
+                                >
+                                    <i class="fas fa-eye"></i>
+                                </button>
+
+                                <button
                                     @click="openEdit(order)"
                                     class="btn-sm btn-edit"
                                 >
-                                    <i class="fas fa-edit"></i> Edit
+                                    <i class="fas fa-edit"></i>
                                 </button>
                                 <button
                                     @click="toggleStatus(order)"
@@ -460,9 +476,90 @@
         </div>
     </div>
 
+    <!-- View Details Modal -->
+    <div
+        class="modal-overlay"
+        x-show="showViewModal"
+        x-transition.opacity
+        x-cloak
+    >
+        <div
+            class="modal-card"
+            @click.away="closeView()"
+            x-trap.noscroll="showViewModal"
+        >
+            <div class="modal-head">
+                <h3>Order Details</h3>
+                <button class="modal-close" @click="closeView()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <template x-if="viewingOrder">
+                <div
+                    class="modal-body"
+                    style="max-height: 70vh; overflow-y: auto"
+                >
+                    <p>
+                        <strong>Customer:</strong>
+                        <span x-text="viewingOrder.customer_name"></span>
+                    </p>
+                    <p>
+                        <strong>Email:</strong>
+                        <span x-text="viewingOrder.customer_email"></span>
+                    </p>
+                    <p>
+                        <strong>Phone:</strong>
+                        <span x-text="viewingOrder.customer_phone"></span>
+                    </p>
+                    <p>
+                        <strong>Address:</strong>
+                        <span x-text="viewingOrder.address || '—'"></span>
+                    </p>
+                    <p>
+                        <strong>Service Type:</strong>
+                        <span x-text="viewingOrder.service_type"></span>
+                    </p>
+                    <p>
+                        <strong>Status:</strong>
+                        <span
+                            class="status-pill"
+                            :class="viewingOrder.status"
+                            x-text="viewingOrder.status"
+                        ></span>
+                    </p>
+                    <p><strong>Message:</strong></p>
+                    <div
+                        style="
+                            background: #f9fafb;
+                            padding: 10px;
+                            border-radius: 8px;
+                        "
+                    >
+                        <pre
+                            style="white-space: pre-wrap; word-wrap: break-word"
+                            x-text="viewingOrder.message"
+                        ></pre>
+                    </div>
+                    <p>
+                        <strong>Date:</strong>
+                        <span
+                            x-text="formatDate(viewingOrder.$createdAt)"
+                        ></span>
+                    </p>
+                </div>
+            </template>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @click="closeView()">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast container (dynamic toasts appended by showNotification) -->
 </div>
-
 
 <style>
     /* --- Layout & theme (inspired by products.html) --- */
@@ -781,6 +878,14 @@
     .btn-danger {
         background: linear-gradient(135deg, #ef4444, #dc2626);
         color: white;
+    }
+
+    .btn-view {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+    .btn-view:hover {
+        background: #bae6fd;
     }
 
     /* Grid view */

@@ -1,729 +1,1115 @@
 <!-- orders.html (ENHANCED) -->
-<!-- Assumptions: Alpine.js is available globally and window.dbService implements getOrders(), updateOrder(id, data), deleteOrder(id) -->
-<div
-  x-data="ordersComponent()"
-  x-init="init()"
-  class="orders-root"
->
-  <!-- Header -->
-  <header class="header-gradient">
-    <div class="header-inner">
-      <div class="header-text">
-        <h1>Orders Management</h1>
-        <p>Review, update and manage customer orders</p>
-      </div>
-
-      <div class="header-actions">
-        <div class="search-wrapper">
-          <i class="fas fa-search search-icon"></i>
-          <input
-            type="search"
-            placeholder="Search orders by name, email or phone..."
-            x-model.debounce.250ms="searchQuery"
-            @input="applyFilters()"
-            class="search-input"
-          />
-          <button x-show="searchQuery" @click="searchQuery=''; applyFilters()" class="search-clear">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <button @click="exportCSV()" class="btn-primary header-btn">
-          <i class="fas fa-file-export"></i> Export
-        </button>
-        <button @click="refresh()" :disabled="loading" class="btn-secondary header-btn">
-          <i class="fas fa-sync-alt"></i> Refresh
-        </button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Controls Bar -->
-  <div class="controls-card">
-    <div class="controls-left">
-      <div class="filter-group">
-        <label class="filter-label">Status</label>
-        <select x-model="selectedStatus" @change="applyFilters()" class="filter-select">
-          <option value="">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Service</label>
-        <select x-model="selectedService" @change="applyFilters()" class="filter-select">
-          <option value="">All Services</option>
-          <option value="delivery">Delivery</option>
-          <option value="pickup">Pickup</option>
-        </select>
-      </div>
-
-      <div class="filter-group">
-        <label class="filter-label">Sort</label>
-        <select x-model="sortBy" @change="applyFilters()" class="filter-select">
-          <option value="latest">Latest</option>
-          <option value="oldest">Oldest</option>
-          <option value="name">Name A–Z</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="controls-right">
-      <div class="view-toggle" role="tablist" aria-label="View mode">
-        <button
-          type="button"
-          @click="viewMode='table'"
-          :class="{'active': viewMode==='table'}"
-          class="view-btn"
-          title="Table view"
-        >
-          <i class="fas fa-table"></i>
-        </button>
-        <button
-          type="button"
-          @click="viewMode='grid'"
-          :class="{'active': viewMode==='grid'}"
-          class="view-btn"
-          title="Card grid view"
-        >
-          <i class="fas fa-th-large"></i>
-        </button>
-      </div>
-
-      <div class="results-summary">
-        <strong x-text="filteredOrders.length"></strong> of <span x-text="orders.length"></span>
-        <span class="muted" x-show="searchQuery || selectedStatus || selectedService"> (filtered)</span>
-        <button class="clear-filters" @click="clearFilters()" x-show="searchQuery || selectedStatus || selectedService">Clear</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Loading -->
-  <div x-show="loading" class="loading-area">
-    <div class="spinner-lg"></div>
-    <div class="loading-text">Loading orders...</div>
-  </div>
-
-  <!-- Main Content Area -->
-  <main x-show="!loading" class="content-area">
-    <!-- Table View -->
-    <div x-show="viewMode === 'table'" class="table-view" x-cloak>
-      <div class="table-wrapper">
-        <table class="orders-table">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Contact</th>
-              <th>Status</th>
-              <th>Service</th>
-              <th>Message</th>
-              <th>Date</th>
-              <th class="col-actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template x-for="order in paginatedOrders" :key="order.$id">
-              <tr class="orders-row">
-                <td class="customer-cell">
-                  <div class="customer-name" x-text="order.customer_name || '—'"></div>
-                  <div class="muted small" x-text="order.address ? order.address : ''"></div>
-                </td>
-
-                <td>
-                  <div x-text="order.customer_email || '—'"></div>
-                  <div class="muted small" x-text="order.customer_phone || '—'"></div>
-                </td>
-
-                <td>
-                  <span class="status-pill" :class="order.status" x-text="order.status"></span>
-                </td>
-
-                <td>
-                  <span class="service-pill" x-text="order.service_type"></span>
-                </td>
-
-                <td class="truncate" :title="order.message" x-text="order.message || '—'"></td>
-
-                <td x-text="formatDate(order.$createdAt)"></td>
-
-                <td class="col-actions">
-                  <button @click="openEdit(order)" class="btn-sm btn-edit"><i class="fas fa-edit"></i></button>
-                  <button @click="toggleStatus(order)" class="btn-sm btn-toggle" :title="order.status === 'pending' ? 'Mark completed' : 'Mark pending'">
-                    <i :class="order.status === 'completed' ? 'fas fa-undo' : 'fas fa-check'"></i>
-                  </button>
-                  <button @click="confirmDelete(order)" class="btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Grid/Card View -->
-    <div x-show="viewMode === 'grid'" class="grid-view" x-cloak>
-      <div class="cards-grid">
-        <template x-for="order in paginatedOrders" :key="order.$id">
-          <article class="order-card">
-            <header class="card-header">
-              <div class="card-name" x-text="order.customer_name || 'Customer'"></div>
-              <div class="card-meta">
-                <span class="muted small" x-text="formatDate(order.$createdAt)"></span>
-              </div>
-            </header>
-
-            <div class="card-body">
-              <div class="card-row">
-                <div class="muted small">Email</div>
-                <div class="card-value" x-text="order.customer_email || '—'"></div>
-              </div>
-
-              <div class="card-row">
-                <div class="muted small">Phone</div>
-                <div class="card-value" x-text="order.customer_phone || '—'"></div>
-              </div>
-
-              <div class="card-row">
-                <div class="muted small">Service</div>
-                <div class="card-value"><span class="service-pill" x-text="order.service_type"></span></div>
-              </div>
-
-              <div class="card-row message-row">
-                <div class="muted small">Message</div>
-                <div class="card-value truncate" :title="order.message" x-text="order.message || '—'"></div>
-              </div>
+<div x-data="ordersComponent()" x-init="init()" class="orders-root">
+    <!-- Header -->
+    <header class="header-gradient">
+        <div class="header-inner">
+            <div class="header-text">
+                <h1>Orders Management</h1>
+                <p>Review, update and manage customer orders</p>
             </div>
 
-            <footer class="card-footer">
-              <span class="status-pill" :class="order.status" x-text="order.status"></span>
-              <div class="card-actions">
-                <button @click="openEdit(order)" class="btn-sm btn-edit"><i class="fas fa-edit"></i> Edit</button>
-                <button @click="toggleStatus(order)" class="btn-sm btn-toggle"><i :class="order.status === 'completed' ? 'fas fa-undo' : 'fas fa-check'"></i></button>
-                <button @click="confirmDelete(order)" class="btn-sm btn-danger"><i class="fas fa-trash"></i></button>
-              </div>
-            </footer>
-          </article>
-        </template>
-      </div>
-    </div>
+            <div class="header-actions">
+                <div class="search-wrapper">
+                    <i class="fas fa-search search-icon"></i>
+                    <input
+                        type="search"
+                        placeholder="Search orders by name, email or phone..."
+                        x-model.debounce.250ms="searchQuery"
+                        @input="applyFilters()"
+                        class="search-input"
+                    />
+                    <button
+                        x-show="searchQuery"
+                        @click="searchQuery=''; applyFilters()"
+                        class="search-clear"
+                    >
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
 
-    <!-- Empty State -->
-    <div x-show="filteredOrders.length === 0 && !loading" class="empty-state" x-cloak>
-      <div class="empty-icon"><i class="fas fa-box-open"></i></div>
-      <h3>No orders found</h3>
-      <p class="muted">You don't have any orders matching the current filters. Try clearing filters or creating an order.</p>
-      <div class="empty-actions">
-        <button class="btn-primary" @click="clearFilters()">Clear filters</button>
-        <button class="btn-secondary" @click="refresh()">Refresh</button>
-      </div>
-    </div>
-  </main>
+                <button @click="exportCSV()" class="btn-primary header-btn">
+                    <i class="fas fa-file-export"></i> Export
+                </button>
+                <button
+                    @click="refresh()"
+                    :disabled="loading"
+                    class="btn-secondary header-btn"
+                >
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </header>
 
-  <!-- Pagination -->
-  <nav class="pagination" x-show="totalPages > 1" x-cloak>
-    <button class="page-btn" :disabled="page === 1" @click="prevPage()">Previous</button>
-    <div class="page-info">Page <strong x-text="page"></strong> of <span x-text="totalPages"></span></div>
-    <button class="page-btn" :disabled="page === totalPages" @click="nextPage()">Next</button>
-  </nav>
+    <!-- Controls Bar -->
+    <div class="controls-card">
+        <div class="controls-left">
+            <div class="filter-group">
+                <label class="filter-label">Status</label>
+                <select
+                    x-model="selectedStatus"
+                    @change="applyFilters()"
+                    class="filter-select"
+                >
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
 
-<!-- Edit Modal -->
-<div class="modal-overlay" x-show="showEditModal" x-transition.opacity x-cloak>
-  <div class="modal-card" @click.away="closeEdit()" x-trap.noscroll="showEditModal">
-    <div class="modal-head">
-      <h3>Edit Order</h3>
-      <button class="modal-close" @click="closeEdit()"><i class="fas fa-times"></i></button>
-    </div>
+            <div class="filter-group">
+                <label class="filter-label">Service</label>
+                <select
+                    x-model="selectedService"
+                    @change="applyFilters()"
+                    class="filter-select"
+                >
+                    <option value="">All Services</option>
+                    <option value="cake-order">Cake Order</option>
+                    <option value="custom-design">Custom Design</option>
+                    <option value="bulk-order">Bulk Order</option>
+                    <option value="consultation">Consultation</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
 
-    <template x-if="editingOrder">
-      <form @submit.prevent="saveEdit()" class="modal-form">
-        <div class="form-row">
-          <label>Status</label>
-          <select x-model="editingOrder.status" x-ref="statusField">
-            <option value="pending">Pending</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+            <div class="filter-group">
+                <label class="filter-label">Sort</label>
+                <select
+                    x-model="sortBy"
+                    @change="applyFilters()"
+                    class="filter-select"
+                >
+                    <option value="latest">Latest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="name">Name A–Z</option>
+                </select>
+            </div>
         </div>
 
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" @click="closeEdit()">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="saving">
-            <span x-show="!saving"><i class="fas fa-save"></i> Save</span>
-            <span x-show="saving" class="btn-spinner"></span>
-          </button>
+        <div class="controls-right">
+            <div class="view-toggle" role="tablist" aria-label="View mode">
+                <button
+                    type="button"
+                    @click="viewMode='table'"
+                    :class="{'active': viewMode==='table'}"
+                    class="view-btn"
+                    title="Table view"
+                >
+                    <i class="fas fa-table"></i>
+                </button>
+                <button
+                    type="button"
+                    @click="viewMode='grid'"
+                    :class="{'active': viewMode==='grid'}"
+                    class="view-btn"
+                    title="Card grid view"
+                >
+                    <i class="fas fa-th-large"></i>
+                </button>
+            </div>
+
+            <div class="results-summary">
+                <strong x-text="filteredOrders.length"></strong> of
+                <span x-text="orders.length"></span>
+                <span
+                    class="muted"
+                    x-show="searchQuery || selectedStatus || selectedService"
+                >
+                    (filtered)</span
+                >
+                <button
+                    class="clear-filters"
+                    @click="clearFilters()"
+                    x-show="searchQuery || selectedStatus || selectedService"
+                >
+                    Clear
+                </button>
+            </div>
         </div>
-      </form>
-    </template>
-  </div>
-</div>
-
-<!-- Delete Confirmation Modal -->
-<div class="modal-overlay" x-show="showDeleteConfirm" x-transition.opacity x-cloak>
-  <div class="modal-card modal-sm" @click.away="showDeleteConfirm=false" x-trap.noscroll="showDeleteConfirm">
-    <div class="modal-head">
-      <h3>Delete Order</h3>
-      <button class="modal-close" @click="showDeleteConfirm=false"><i class="fas fa-times"></i></button>
     </div>
 
-    <div class="modal-body">
-      <p>Are you sure you want to delete <strong x-text="deletingOrder?.customer_name"></strong>’s order?</p>
+    <!-- Loading -->
+    <div x-show="loading" class="loading-area">
+        <div class="spinner-lg"></div>
+        <div class="loading-text">Loading orders...</div>
     </div>
 
-    <div class="modal-actions">
-      <button class="btn-secondary" @click="showDeleteConfirm=false">Cancel</button>
-      <button class="btn-danger" @click="deleteOrderConfirmed()" :disabled="deleting">
-        <i class="fas fa-trash"></i> Delete
-      </button>
+    <!-- Main Content Area -->
+    <main x-show="!loading" class="content-area">
+        <!-- Table View -->
+        <div x-show="viewMode === 'table'" class="table-view" x-cloak>
+            <div class="table-wrapper">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Contact</th>
+                            <th>Status</th>
+                            <th>Service</th>
+                            <th>Message</th>
+                            <th>Date</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template
+                            x-for="order in paginatedOrders"
+                            :key="order.$id"
+                        >
+                            <tr class="orders-row">
+                                <td class="customer-cell">
+                                    <div
+                                        class="customer-name"
+                                        x-text="order.customer_name || '—'"
+                                    ></div>
+                                    <div
+                                        class="muted small"
+                                        x-text="order.address ? order.address : ''"
+                                    ></div>
+                                </td>
+
+                                <td>
+                                    <div
+                                        x-text="order.customer_email || '—'"
+                                    ></div>
+                                    <div
+                                        class="muted small"
+                                        x-text="order.customer_phone || '—'"
+                                    ></div>
+                                </td>
+
+                                <td>
+                                    <span
+                                        class="status-pill"
+                                        :class="order.status"
+                                        x-text="order.status"
+                                    ></span>
+                                </td>
+
+                                <td>
+                                    <span
+                                        class="service-pill"
+                                        x-text="order.service_type"
+                                    ></span>
+                                </td>
+
+                                <td
+                                    class="truncate"
+                                    :title="order.message"
+                                    x-text="order.message || '—'"
+                                ></td>
+
+                                <td x-text="formatDate(order.$createdAt)"></td>
+
+                                <td class="col-actions">
+                                    <button
+                                        @click="openEdit(order)"
+                                        class="btn-sm btn-edit"
+                                    >
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button
+                                        @click="openView(order)"
+                                        class="btn-sm btn-view"
+                                    >
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+
+                                    <button
+                                        @click="toggleStatus(order)"
+                                        class="btn-sm btn-toggle"
+                                        :title="order.status === 'pending' ? 'Mark completed' : 'Mark pending'"
+                                    >
+                                        <i
+                                            :class="order.status === 'completed' ? 'fas fa-undo' : 'fas fa-check'"
+                                        ></i>
+                                    </button>
+                                    <button
+                                        @click="confirmDelete(order)"
+                                        class="btn-sm btn-danger"
+                                    >
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Grid/Card View -->
+        <div x-show="viewMode === 'grid'" class="grid-view" x-cloak>
+            <div class="cards-grid">
+                <template x-for="order in paginatedOrders" :key="order.$id">
+                    <article class="order-card">
+                        <header class="card-header">
+                            <div
+                                class="card-name"
+                                x-text="order.customer_name || 'Customer'"
+                            ></div>
+                            <div class="card-meta">
+                                <span
+                                    class="muted small"
+                                    x-text="formatDate(order.$createdAt)"
+                                ></span>
+                            </div>
+                        </header>
+
+                        <div class="card-body">
+                            <div class="card-row">
+                                <div class="muted small">Email</div>
+                                <div
+                                    class="card-value"
+                                    x-text="order.customer_email || '—'"
+                                ></div>
+                            </div>
+
+                            <div class="card-row">
+                                <div class="muted small">Phone</div>
+                                <div
+                                    class="card-value"
+                                    x-text="order.customer_phone || '—'"
+                                ></div>
+                            </div>
+
+                            <div class="card-row">
+                                <div class="muted small">Service</div>
+                                <div class="card-value">
+                                    <span
+                                        class="service-pill"
+                                        x-text="order.service_type"
+                                    ></span>
+                                </div>
+                            </div>
+
+                            <div class="card-row message-row">
+                                <div class="muted small">Message</div>
+                                <div
+                                    class="card-value truncate"
+                                    :title="order.message"
+                                    x-text="order.message || '—'"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <footer class="card-footer">
+                            <span
+                                class="status-pill"
+                                :class="order.status"
+                                x-text="order.status"
+                            ></span>
+                            <div class="card-actions">
+                                <button
+                                    @click="openView(order)"
+                                    class="btn-sm btn-view"
+                                >
+                                    <i class="fas fa-eye"></i>
+                                </button>
+
+                                <button
+                                    @click="openEdit(order)"
+                                    class="btn-sm btn-edit"
+                                >
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button
+                                    @click="toggleStatus(order)"
+                                    class="btn-sm btn-toggle"
+                                >
+                                    <i
+                                        :class="order.status === 'completed' ? 'fas fa-undo' : 'fas fa-check'"
+                                    ></i>
+                                </button>
+                                <button
+                                    @click="confirmDelete(order)"
+                                    class="btn-sm btn-danger"
+                                >
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </footer>
+                    </article>
+                </template>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div
+            x-show="filteredOrders.length === 0 && !loading"
+            class="empty-state"
+            x-cloak
+        >
+            <div class="empty-icon"><i class="fas fa-box-open"></i></div>
+            <h3>No orders found</h3>
+            <p class="muted">
+                You don't have any orders matching the current filters. Try
+                clearing filters or creating an order.
+            </p>
+            <div class="empty-actions">
+                <button class="btn-primary" @click="clearFilters()">
+                    Clear filters
+                </button>
+                <button class="btn-secondary" @click="refresh()">
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Pagination -->
+    <nav class="pagination" x-show="totalPages > 1" x-cloak>
+        <button class="page-btn" :disabled="page === 1" @click="prevPage()">
+            Previous
+        </button>
+        <div class="page-info">
+            Page <strong x-text="page"></strong> of
+            <span x-text="totalPages"></span>
+        </div>
+        <button
+            class="page-btn"
+            :disabled="page === totalPages"
+            @click="nextPage()"
+        >
+            Next
+        </button>
+    </nav>
+
+    <!-- Edit Modal -->
+    <div
+        class="modal-overlay"
+        x-show="showEditModal"
+        x-transition.opacity
+        x-cloak
+    >
+        <div
+            class="modal-card"
+            @click.away="closeEdit()"
+            x-trap.noscroll="showEditModal"
+        >
+            <div class="modal-head">
+                <h3>Edit Order</h3>
+                <button class="modal-close" @click="closeEdit()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <template x-if="editingOrder">
+                <form @submit.prevent="saveEdit()" class="modal-form">
+                    <div class="form-row">
+                        <label>Status</label>
+                        <select
+                            x-model="editingOrder.status"
+                            x-ref="statusField"
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button
+                            type="button"
+                            class="btn-secondary"
+                            @click="closeEdit()"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            class="btn-primary"
+                            :disabled="saving"
+                        >
+                            <span x-show="!saving"
+                                ><i class="fas fa-save"></i> Save</span
+                            >
+                            <span x-show="saving" class="btn-spinner"></span>
+                        </button>
+                    </div>
+                </form>
+            </template>
+        </div>
     </div>
-  </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div
+        class="modal-overlay"
+        x-show="showDeleteConfirm"
+        x-transition.opacity
+        x-cloak
+    >
+        <div
+            class="modal-card modal-sm"
+            @click.away="showDeleteConfirm=false"
+            x-trap.noscroll="showDeleteConfirm"
+        >
+            <div class="modal-head">
+                <h3>Delete Order</h3>
+                <button class="modal-close" @click="showDeleteConfirm=false">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <p>
+                    Are you sure you want to delete
+                    <strong x-text="deletingOrder?.customer_name"></strong>’s
+                    order?
+                </p>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @click="showDeleteConfirm=false">
+                    Cancel
+                </button>
+                <button
+                    class="btn-danger"
+                    @click="deleteOrderConfirmed()"
+                    :disabled="deleting"
+                >
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Details Modal -->
+    <div
+        class="modal-overlay"
+        x-show="showViewModal"
+        x-transition.opacity
+        x-cloak
+    >
+        <div
+            class="modal-card"
+            @click.away="closeView()"
+            x-trap.noscroll="showViewModal"
+        >
+            <div class="modal-head">
+                <h3>Order Details</h3>
+                <button class="modal-close" @click="closeView()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <template x-if="viewingOrder">
+                <div
+                    class="modal-body"
+                    style="max-height: 70vh; overflow-y: auto"
+                >
+                    <p>
+                        <strong>Customer:</strong>
+                        <span x-text="viewingOrder.customer_name"></span>
+                    </p>
+                    <p>
+                        <strong>Email:</strong>
+                        <span x-text="viewingOrder.customer_email"></span>
+                    </p>
+                    <p>
+                        <strong>Phone:</strong>
+                        <span x-text="viewingOrder.customer_phone"></span>
+                    </p>
+                    <p>
+                        <strong>Address:</strong>
+                        <span x-text="viewingOrder.address || '—'"></span>
+                    </p>
+                    <p>
+                        <strong>Service Type:</strong>
+                        <span x-text="viewingOrder.service_type"></span>
+                    </p>
+                    <p>
+                        <strong>Status:</strong>
+                        <span
+                            class="status-pill"
+                            :class="viewingOrder.status"
+                            x-text="viewingOrder.status"
+                        ></span>
+                    </p>
+                    <p><strong>Message:</strong></p>
+                    <div
+                        style="
+                            background: #f9fafb;
+                            padding: 10px;
+                            border-radius: 8px;
+                        "
+                    >
+                        <pre
+                            style="white-space: pre-wrap; word-wrap: break-word"
+                            x-text="viewingOrder.message"
+                        ></pre>
+                    </div>
+                    <p>
+                        <strong>Date:</strong>
+                        <span
+                            x-text="formatDate(viewingOrder.$createdAt)"
+                        ></span>
+                    </p>
+                </div>
+            </template>
+
+            <div class="modal-actions">
+                <button class="btn-secondary" @click="closeView()">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container (dynamic toasts appended by showNotification) -->
 </div>
-
-  <!-- Toast container (dynamic toasts appended by showNotification) -->
-</div>
-
-<script>
-  function ordersComponent() {
-    return {
-      // Data
-      orders: [],
-      filteredOrdersLocalCache: [], // for search & filter operations
-      searchQuery: '',
-      selectedStatus: '',
-      selectedService: '',
-      sortBy: 'latest',
-      viewMode: 'table', // 'table' | 'grid'
-      page: 1,
-      perPage: 8,
-      loading: false,
-      saving: false,
-
-      // Modals / actions
-      showEditModal: false,
-      editingOrder: null,
-      showDeleteConfirm: false,
-      deletingOrder: null,
-      deleting: false,
-
-      // Lifecycle: init
-      async init() {
-        await this.loadOrders();
-      },
-
-      async loadOrders() {
-        this.loading = true;
-        try {
-          if (!window.dbService || typeof window.dbService.getOrders !== 'function') {
-            throw new Error('Database service not available. Make sure window.dbService.getOrders() exists.');
-          }
-
-          const res = await window.dbService.getOrders();
-          this.orders = (res && res.documents) ? res.documents : [];
-          // Normalize service and status fields safely
-          this.orders.forEach(o => {
-            o.service_type = o.service_type || (o.service || 'delivery');
-            o.status = (o.status || 'pending').toString();
-          });
-
-          // Keep initial filtered cache
-          this.applyFilters();
-          this.showNotification('Orders loaded', 'success');
-        } catch (err) {
-          console.error(err);
-          this.showNotification('Failed to load orders', 'error');
-        } finally {
-          this.loading = false;
-        }
-      },
-
-      refresh() {
-        this.loadOrders();
-      },
-
-      // Filtering and sorting
-      applyFilters() {
-        let items = [...this.orders];
-
-        // Search
-        if (this.searchQuery && this.searchQuery.trim() !== '') {
-          const q = this.searchQuery.toLowerCase();
-          items = items.filter(o =>
-            ((o.customer_name || '') + ' ' + (o.customer_email || '') + ' ' + (o.customer_phone || '')).toLowerCase().includes(q) ||
-            (o.message || '').toLowerCase().includes(q)
-          );
-        }
-
-        // Status
-        if (this.selectedStatus) {
-          items = items.filter(o => o.status === this.selectedStatus);
-        }
-
-        // Service
-        if (this.selectedService) {
-          items = items.filter(o => o.service_type === this.selectedService);
-        }
-
-        // Sort
-        if (this.sortBy === 'latest') {
-          items.sort((a, b) => new Date(b.$createdAt) - new Date(a.$createdAt));
-        } else if (this.sortBy === 'oldest') {
-          items.sort((a, b) => new Date(a.$createdAt) - new Date(b.$createdAt));
-        } else if (this.sortBy === 'name') {
-          items.sort((a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''));
-        }
-
-        this.filteredOrdersLocalCache = items;
-        this.page = 1; // reset to first page when filters change
-      },
-
-      clearFilters() {
-        this.searchQuery = '';
-        this.selectedStatus = '';
-        this.selectedService = '';
-        this.sortBy = 'latest';
-        this.applyFilters();
-      },
-
-      // Derived getters
-      get filteredOrders() {
-        return this.filteredOrdersLocalCache;
-      },
-
-      get totalPages() {
-        return Math.max(1, Math.ceil(this.filteredOrders.length / this.perPage));
-      },
-
-      get paginatedOrders() {
-        const start = (this.page - 1) * this.perPage;
-        return this.filteredOrders.slice(start, start + this.perPage);
-      },
-
-      nextPage() {
-        if (this.page < this.totalPages) this.page++;
-      },
-      prevPage() {
-        if (this.page > 1) this.page--;
-      },
-
-      // Modal actions
-      openEdit(order) {
-        // clone to avoid immediate mutation
-        this.editingOrder = JSON.parse(JSON.stringify(order));
-        this.showEditModal = true;
-      },
-
-      closeEdit() {
-        this.editingOrder = null;
-        this.showEditModal = false;
-      },
-
-      async saveEdit() {
-        if (!this.editingOrder) return;
-        this.saving = true;
-        try {
-          await window.dbService.updateOrder(this.editingOrder.$id, {
-            status: this.editingOrder.status,
-            notes: this.editingOrder.notes || ''
-          });
-
-          // update local list
-          const idx = this.orders.findIndex(o => o.$id === this.editingOrder.$id);
-          if (idx !== -1) {
-            this.orders[idx] = { ...this.orders[idx], ...this.editingOrder };
-          }
-          this.applyFilters();
-          this.showNotification('Order updated', 'success');
-          this.closeEdit();
-        } catch (err) {
-          console.error(err);
-          this.showNotification('Failed to update order', 'error');
-        } finally {
-          this.saving = false;
-        }
-      },
-
-      confirmDelete(order) {
-        this.deletingOrder = order;
-        this.showDeleteConfirm = true;
-      },
-
-      async deleteOrderConfirmed() {
-        if (!this.deletingOrder) return;
-        this.deleting = true;
-        try {
-          await window.dbService.deleteOrder(this.deletingOrder.$id);
-          this.orders = this.orders.filter(o => o.$id !== this.deletingOrder.$id);
-          this.applyFilters();
-          this.showNotification('Order deleted', 'success');
-        } catch (err) {
-          console.error(err);
-          this.showNotification('Failed to delete order', 'error');
-        } finally {
-          this.deleting = false;
-          this.showDeleteConfirm = false;
-          this.deletingOrder = null;
-        }
-      },
-
-      // Quick toggle status: pending <-> completed
-      async toggleStatus(order) {
-        try {
-          const newStatus = order.status === 'completed' ? 'pending' : 'completed';
-          await window.dbService.updateOrder(order.$id, { status: newStatus });
-          const idx = this.orders.findIndex(o => o.$id === order.$id);
-          if (idx !== -1) this.orders[idx].status = newStatus;
-          this.applyFilters();
-          this.showNotification(`Marked ${newStatus}`, 'success');
-        } catch (err) {
-          console.error(err);
-          this.showNotification('Failed to update status', 'error');
-        }
-      },
-
-      // Export CSV (simple client-side)
-      exportCSV() {
-        if (!this.orders || this.orders.length === 0) {
-          this.showNotification('No orders to export', 'info');
-          return;
-        }
-
-        const fields = ['customer_name', 'customer_email', 'customer_phone', 'status', 'service_type', 'message', '$createdAt'];
-        const rows = [fields.join(',')];
-
-        this.filteredOrders.forEach(o => {
-          const r = fields.map(f => {
-            const val = (o[f] || '').toString().replace(/"/g, '""');
-            return `"${val}"`;
-          }).join(',');
-          rows.push(r);
-        });
-
-        const csv = rows.join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `orders_export_${new Date().toISOString().slice(0,10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-
-        this.showNotification('Exported CSV', 'success');
-      },
-
-      // Helpers
-      formatDate(dt) {
-        if (!dt) return '—';
-        try {
-          const d = new Date(dt);
-          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-        } catch (e) {
-          return dt;
-        }
-      },
-
-      // Toasts: copied/adjusted from products UI
-      showNotification(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.innerHTML = `
-          <div class="toast-content">
-            <i class="toast-icon ${type === 'success' ? 'fas fa-check-circle' : type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'}"></i>
-            <span>${message}</span>
-          </div>
-          <button class="toast-close" aria-label="Close">&times;</button>
-        `;
-        toast.querySelector('.toast-close').addEventListener('click', () => {
-          toast.remove();
-        });
-
-        // Inject styles once
-        if (!document.querySelector('#orders-toast-styles')) {
-          const s = document.createElement('style');
-          s.id = 'orders-toast-styles';
-          s.textContent = `
-            .toast {
-              position: fixed;
-              top: 20px;
-              right: 20px;
-              min-width: 300px;
-              padding: 14px 16px;
-              border-radius: 12px;
-              color: white;
-              z-index: 99999;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-              animation: slideIn 0.25s ease;
-            }
-            .toast-content { display:flex; gap:10px; align-items:center; flex:1; }
-            .toast-icon { font-size:18px; opacity:0.95; }
-            .toast-success { background: linear-gradient(135deg,#10b981,#059669); }
-            .toast-error { background: linear-gradient(135deg,#ef4444,#dc2626); }
-            .toast-info { background: linear-gradient(135deg,#3b82f6,#2563eb); }
-            .toast-close { background: transparent; border: none; color: rgba(255,255,255,0.9); font-size:18px; cursor:pointer;}
-            @keyframes slideIn { from { transform: translateX(20px); opacity: 0 } to { transform: translateX(0); opacity:1 } }
-          `;
-          document.head.appendChild(s);
-        }
-
-        document.body.appendChild(toast);
-        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 4500);
-      }
-    };
-  }
-</script>
 
 <style>
-  /* --- Layout & theme (inspired by products.html) --- */
-  :root {
-    --accent-1: #8b4a87;
-    --accent-2: #d4a574;
-    --muted: #6b7280;
-    --bg: #f7f7fb;
-    --card-bg: #ffffff;
-  }
+    /* --- Layout & theme (inspired by products.html) --- */
+    :root {
+        --accent-1: #8b4a87;
+        --accent-2: #d4a574;
+        --muted: #6b7280;
+        --bg: #f7f7fb;
+        --card-bg: #ffffff;
+    }
 
-  .orders-root {
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    color: #111827;
-    padding: 24px;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
+    .orders-root {
+        font-family:
+            Inter,
+            system-ui,
+            -apple-system,
+            "Segoe UI",
+            Roboto,
+            "Helvetica Neue",
+            Arial;
+        color: #111827;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
 
-  /* Header */
-  .header-gradient {
-    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-    border-radius: 16px;
-    color: white;
-    padding: 24px;
-    margin-bottom: 20px;
-    box-shadow: 0 10px 30px rgba(139,74,135,0.12);
-  }
-  .header-inner { display:flex; gap:20px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-  .header-text h1 { margin:0; font-family: "Playfair Display", serif; font-size: 26px; }
-  .header-text p { margin:4px 0 0; opacity:0.92; }
+    /* Header */
+    .header-gradient {
+        background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+        border-radius: 16px;
+        color: white;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(139, 74, 135, 0.12);
+    }
+    .header-inner {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+    .header-text h1 {
+        margin: 0;
+        font-family: "Playfair Display", serif;
+        font-size: 26px;
+    }
+    .header-text p {
+        margin: 4px 0 0;
+        opacity: 0.92;
+    }
 
-  .header-actions { display:flex; gap:12px; align-items:center; }
+    .header-actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+    }
 
-  .header-btn { border-radius:12px; padding:10px 14px; display:inline-flex; gap:8px; align-items:center; cursor:pointer; border: none; font-weight:600; }
-  .btn-primary.header-btn { background: linear-gradient(135deg,#ffffff,#f8fafc); color:var(--accent-1); border:2px solid rgba(255,255,255,0.12); }
-  .btn-secondary.header-btn { background: rgba(255,255,255,0.12); color: white; }
+    .header-btn {
+        border-radius: 12px;
+        padding: 10px 14px;
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        cursor: pointer;
+        border: none;
+        font-weight: 600;
+    }
+    .btn-primary.header-btn {
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
+        color: var(--accent-1);
+        border: 2px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-secondary.header-btn {
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+    }
 
-  /* Search */
-  .search-wrapper { position:relative; width:360px; max-width:45vw; }
-  .search-input { width:100%; padding:10px 38px 10px 40px; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.08); color: white; }
-  .search-input::placeholder { color: rgba(255,255,255,0.9); opacity:0.9; }
-  .search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.95); }
-  .search-clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:white; padding:6px; cursor:pointer; border-radius:6px; }
+    /* Search */
+    .search-wrapper {
+        position: relative;
+        width: 360px;
+        max-width: 45vw;
+    }
+    .search-input {
+        width: 100%;
+        padding: 10px 38px 10px 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
+    }
+    .search-input::placeholder {
+        color: rgba(255, 255, 255, 0.9);
+        opacity: 0.9;
+    }
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.95);
+    }
+    .search-clear {
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: transparent;
+        border: none;
+        color: white;
+        padding: 6px;
+        cursor: pointer;
+        border-radius: 6px;
+    }
 
-  /* Controls card */
-  .controls-card {
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-    background: var(--card-bg);
-    border-radius:12px;
-    padding:16px;
-    margin-bottom:18px;
-    box-shadow: 0 6px 18px rgba(12,12,12,0.04);
-    align-items:center;
-    border:1px solid #eef2f6;
-  }
-  .controls-left { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  .controls-right { display:flex; gap:16px; align-items:center; }
+    /* Controls card */
+    .controls-card {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 18px;
+        box-shadow: 0 6px 18px rgba(12, 12, 12, 0.04);
+        align-items: center;
+        border: 1px solid #eef2f6;
+    }
+    .controls-left {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .controls-right {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+    }
 
-  .filter-group { display:flex; flex-direction:column; gap:6px; min-width:160px; }
-  .filter-label { font-size:12px; color:var(--muted); font-weight:600; }
-  .filter-select { padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; background:white; min-width:140px; }
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 160px;
+    }
+    .filter-label {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+    }
+    .filter-select {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid #e6e9ef;
+        background: white;
+        min-width: 140px;
+    }
 
-  .view-toggle { display:flex; border-radius:8px; background:#f3f4f6; padding:4px; }
-  .view-btn { background:none; border:none; padding:8px 10px; border-radius:6px; cursor:pointer; color:var(--muted); }
-  .view-btn.active { background:white; color:var(--accent-1); box-shadow: 0 4px 10px rgba(0,0,0,0.06); }
+    .view-toggle {
+        display: flex;
+        border-radius: 8px;
+        background: #f3f4f6;
+        padding: 4px;
+    }
+    .view-btn {
+        background: none;
+        border: none;
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--muted);
+    }
+    .view-btn.active {
+        background: white;
+        color: var(--accent-1);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    }
 
-  .results-summary { color:var(--muted); font-size:13px; display:flex; align-items:center; gap:8px; }
-  .clear-filters { border:none; background:transparent; color:var(--accent-1); cursor:pointer; text-decoration:underline; font-size:13px; }
+    .results-summary {
+        color: var(--muted);
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .clear-filters {
+        border: none;
+        background: transparent;
+        color: var(--accent-1);
+        cursor: pointer;
+        text-decoration: underline;
+        font-size: 13px;
+    }
 
-  /* Loading */
-  .loading-area { text-align:center; padding:48px 0; color:var(--muted); }
-  .spinner-lg { width:40px; height:40px; border-radius:50%; border:4px solid #f3f4f6; border-top-color:var(--accent-1); margin:0 auto 12px; animation:spin 1s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+    /* Loading */
+    .loading-area {
+        text-align: center;
+        padding: 48px 0;
+        color: var(--muted);
+    }
+    .spinner-lg {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 4px solid #f3f4f6;
+        border-top-color: var(--accent-1);
+        margin: 0 auto 12px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
 
-  /* Table view */
-  .table-wrapper { overflow-x:auto; border-radius:12px; background:var(--card-bg); border:1px solid #eef2f6; }
-  .orders-table { width:100%; border-collapse:collapse; min-width:900px; }
-  .orders-table thead th { text-align:left; padding:12px 14px; font-size:13px; color:var(--muted); border-bottom:1px solid #eef2f6; background: #fff; position:sticky; top:0; z-index:1; }
-  .orders-table tbody td { padding:12px 14px; border-bottom:1px solid #f5f7fa; vertical-align:middle; }
-  .orders-row:hover { background: #fbfbfe; transform: none; }
+    /* Table view */
+    .table-wrapper {
+        overflow-x: auto;
+        border-radius: 12px;
+        background: var(--card-bg);
+        border: 1px solid #eef2f6;
+    }
+    .orders-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 900px;
+    }
+    .orders-table thead th {
+        text-align: left;
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--muted);
+        border-bottom: 1px solid #eef2f6;
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .orders-table tbody td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #f5f7fa;
+        vertical-align: middle;
+    }
+    .orders-row:hover {
+        background: #fbfbfe;
+        transform: none;
+    }
 
-  .customer-cell .customer-name { font-weight:600; color:#111827; }
-  .muted { color:var(--muted); }
-  .small { font-size:12px; }
+    .customer-cell .customer-name {
+        font-weight: 600;
+        color: #111827;
+    }
+    .muted {
+        color: var(--muted);
+    }
+    .small {
+        font-size: 12px;
+    }
 
-  .status-pill { padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px; text-transform:capitalize; display:inline-block; }
-  .status-pill.pending { background:#fef3c7; color:#92400e; }
-  .status-pill.completed { background:#d1fae5; color:#065f46; }
-  .status-pill.cancelled { background:#fee2e2; color:#991b1b; }
+    .status-pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 12px;
+        text-transform: capitalize;
+        display: inline-block;
+    }
+    .status-pill.pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .status-pill.completed {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .status-pill.cancelled {
+        background: #fee2e2;
+        color: #991b1b;
+    }
 
-  .service-pill { background:#f3f4f6; padding:6px 10px; border-radius:999px; font-weight:600; font-size:12px; color:#374151; }
+    .service-pill {
+        background: #f3f4f6;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 12px;
+        color: #374151;
+    }
 
-  .col-actions { width:120px; text-align:center; }
+    .col-actions {
+        width: 120px;
+        text-align: center;
+    }
 
-  /* Buttons small */
-  .btn-sm { padding:6px 8px; border-radius:8px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-size:13px; }
-  .btn-edit { background:#f3f4f6; color:#374151; }
-  .btn-toggle { background:#fff3; color:#374151; border:1px solid #eee; }
-  .btn-danger { background: linear-gradient(135deg,#ef4444,#dc2626); color:white; }
+    /* Buttons small */
+    .btn-sm {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .btn-edit {
+        background: #f3f4f6;
+        color: #374151;
+    }
+    .btn-toggle {
+        background: #fff3;
+        color: #374151;
+        border: 1px solid #eee;
+    }
+    .btn-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+    }
 
-  /* Grid view */
-  .cards-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:16px; }
-  .order-card { background:var(--card-bg); border-radius:12px; padding:14px; border:1px solid #eef2f6; display:flex; flex-direction:column; justify-content:space-between; min-height:170px; box-shadow:0 6px 18px rgba(12,12,12,0.04); }
-  .card-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
-  .card-name { font-weight:700; color:#111827; }
-  .card-body { display:flex; flex-direction:column; gap:8px; color:#374151; }
-  .card-row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-  .message-row .card-value { max-width:220px; }
-  .card-footer { display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:12px; }
+    .btn-view {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+    .btn-view:hover {
+        background: #bae6fd;
+    }
 
-  .card-actions { display:flex; gap:8px; }
+    /* Grid view */
+    .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+    .order-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 14px;
+        border: 1px solid #eef2f6;
+        display: flex;
+        flex-direction: column;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        min-height: 170px;
+        box-shadow: 0 6px 18px rgba(12, 12, 12, 0.04);
+    }
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .card-name {
+        font-weight: 700;
+        color: #111827;
+        font-size: 12px;
+    }
+    .card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        color: #374151;
+    }
+    .card-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .message-row .card-value {
+        max-width: 220px;
+    }
+    .card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+        gap: 12px;
+    }
 
-  /* Empty state */
-  .empty-state { text-align:center; padding:48px; background:var(--card-bg); border-radius:12px; color:var(--muted); border:1px solid #eef2f6; }
-  .empty-icon { font-size:48px; color:#e6e6ea; margin-bottom:12px; }
+    .card-actions {
+        display: flex;
+        gap: 8px;
+    }
 
-  /* Pagination */
-  .pagination { margin-top:18px; display:flex; justify-content:center; align-items:center; gap:12px; }
-  .page-btn { padding:8px 12px; border-radius:8px; border:1px solid #e8eef7; background:white; cursor:pointer; }
-  .page-info { color:var(--muted); }
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: 48px;
+        background: var(--card-bg);
+        border-radius: 12px;
+        color: var(--muted);
+        border: 1px solid #eef2f6;
+    }
+    .empty-icon {
+        font-size: 48px;
+        color: #e6e6ea;
+        margin-bottom: 12px;
+    }
 
-  /* Modal styles (aligned with products) */
-  .modal-overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.45); z-index:9999; }
-  .modal-card { background:white; border-radius:14px; width:520px; max-width:94%; padding:18px; box-shadow:0 30px 60px rgba(0,0,0,0.15); }
-  .modal-card.modal-sm { width:420px; }
-  .modal-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
-  .modal-close { background:transparent; border:none; font-size:18px; cursor:pointer; color:var(--muted); }
-  .modal-form .form-row { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
-  .modal-form input, .modal-form select, .modal-form textarea { padding:10px; border-radius:8px; border:1px solid #e8eef7; font-size:14px; }
-  .modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
-  .btn-primary { background: linear-gradient(135deg,#ffffff,#f8fafc); color:var(--accent-1); padding:10px 14px; border-radius:10px; border:2px solid rgba(0,0,0,0.04); font-weight:700; }
-  .btn-secondary { background:#f3f4f6; padding:10px 12px; border-radius:10px; color:#374151; }
-  .btn-danger { background: linear-gradient(135deg,#ef4444,#dc2626); color:white; padding:10px 12px; border-radius:10px; border:none; }
+    /* Pagination */
+    .pagination {
+        margin-top: 18px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+    }
+    .page-btn {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e8eef7;
+        background: white;
+        cursor: pointer;
+    }
+    .page-info {
+        color: var(--muted);
+    }
 
-  .btn-spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; display:inline-block; }
+    /* Modal styles (aligned with products) */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 9999;
+    }
+    .modal-card {
+        background: white;
+        border-radius: 14px;
+        width: 520px;
+        max-width: 94%;
+        padding: 18px;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15);
+    }
+    .modal-card.modal-sm {
+        width: 420px;
+    }
+    .modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .modal-close {
+        background: transparent;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        color: var(--muted);
+    }
+    .modal-form .form-row {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .modal-form input,
+    .modal-form select,
+    .modal-form textarea {
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #e8eef7;
+        font-size: 14px;
+    }
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 12px;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #ffffff, #f8fafc);
+        color: var(--accent-1);
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 2px solid rgba(0, 0, 0, 0.04);
+        font-weight: 700;
+    }
+    .btn-secondary {
+        background: #f3f4f6;
+        padding: 10px 12px;
+        border-radius: 10px;
+        color: #374151;
+    }
+    .btn-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: none;
+    }
 
-  /* small utilities */
-  .truncate { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; vertical-align:middle; }
+    .btn-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
 
-  /* responsive tweaks */
-  @media (max-width: 900px) {
-    .search-wrapper { width:100%; max-width:unset; }
-    .controls-card { flex-direction:column; align-items:stretch; gap:12px; }
-    .controls-left { width:100%; }
-    .controls-right { width:100%; justify-content:space-between; }
-    .col-actions { width:auto; }
-  }
+    /* small utilities */
+    .truncate {
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    /* responsive tweaks */
+    @media (max-width: 900px) {
+        .search-wrapper {
+            width: 100%;
+            max-width: unset;
+        }
+        .controls-card {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+        }
+        .controls-left {
+            width: 100%;
+        }
+        .controls-right {
+            width: 100%;
+            justify-content: space-between;
+        }
+        .col-actions {
+            width: auto;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .header-actions {
+            flex-direction: column;
+            width: 100%;
+            align-items: stretch;
+        }
+        .header-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
 </style>

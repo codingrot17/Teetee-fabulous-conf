@@ -1,992 +1,815 @@
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Site Content Editor</title>
-        <script
-            defer
-            src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"
-        ></script>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-        />
-    </head>
-    <body>
-        <div
-            x-data="{
-    loading: true,
-    saving: false,
-    activeTab: 'hero',
-    toast: { show: false, message: '', type: '' },
+<div x-data="contentComponent()" x-init="init()" >
+    <!-- Loading State -->
+    <div x-show="loading" class="loading-state">
+        <div class="loading-spinner-enhanced">
+            <div class="spinner"></div>
+            <p>Loading Contents...</p>
+        </div>
+    </div>
 
-    // Default Content
-    content: {
-      hero: { text1: '', text2: '', text3: '', text3_highlight: '', cta_button: '', background_image: '', imagePreview: '' },
-      about: { title: '', subtitle: '', main_text: '', typing_text: '', mission_title: '', mission_text: '', vision_title: '', vision_text: '', values_title: '', values: [], cta_button: '' },
-      skills: { title: '', subtitle: '', main_text: '', description: '', highlights: [], skills: [], cta_button: '' },
-      contact: { title: '', subtitle: '', main_text: '', description: '', contact_person: '', address: '', email: '', whatsapp: '', business_hours: '', form_title: '', services: [] },
-      footer: { company_name: '', tagline: '', quick_links: [], services_links: [], social_links: [], copyright: '' },
-      navigation: { logo_text: '', menu_items: [] }
-    },
-
-    async init() {
-      await this.loadContent();
-    },
-
-    async loadContent() {
-      this.loading = true;
-      try {
-        if (!window.dbService) {
-          console.warn('Database service not available, using defaults');
-          return;
-        }
-        const sections = ['hero','about','skills','contact','footer','navigation'];
-        for (const section of sections) {
-          try {
-            const sectionContent = await window.dbService.getSiteContent(section);
-            if (sectionContent) {
-              this.content[section] = { ...this.content[section], ...sectionContent };
-            }
-          } catch (err) {
-            console.warn(`Failed to load ${section}:`, err);
-          }
-        }
-      } catch (err) {
-        console.error('Error loading content:', err);
-        this.showNotification('Failed to load content', 'error');
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    setActiveTab(tab) { this.activeTab = tab },
-
-    async saveContent() {
-      this.saving = true;
-      try {
-        if (!window.dbService) throw new Error('Database service not available');
-        await window.dbService.updateSiteContent(this.activeTab, this.content[this.activeTab]);
-        this.showNotification('Content saved successfully!', 'success');
-      } catch (err) {
-        console.error('Save error:', err);
-        this.showNotification('Failed to save content.', 'error');
-      } finally {
-        this.saving = false;
-      }
-    },
-
-    async saveAllContent() {
-      this.saving = true;
-      try {
-        if (!window.dbService) throw new Error('Database service not available');
-        const sections = ['hero','about','skills','contact','footer','navigation'];
-        for (const section of sections) {
-          await window.dbService.updateSiteContent(section, this.content[section]);
-        }
-        this.showNotification('All content saved successfully!', 'success');
-      } catch (err) {
-        console.error('Save all error:', err);
-        this.showNotification('Failed to save all content.', 'error');
-      } finally {
-        this.saving = false;
-      }
-    },
-
-    // Hero Image Upload
-    async handleImageUpload(event) {
-      const file = event.target.files[0];
-      if (file) {
-        try {
-          if (!window.dbService) throw new Error('Database service not available');
-          this.showNotification('Uploading image...', 'info');
-          const uploadResult = await window.dbService.uploadImage(file);
-          this.content.hero.background_image = uploadResult.id;
-          this.content.hero.imagePreview = uploadResult.url;
-          this.showNotification('Image uploaded successfully!', 'success');
-        } catch (err) {
-          console.error('Upload error:', err);
-          this.showNotification('Failed to upload image', 'error');
-        }
-      }
-    },
-    removeImage() { this.content.hero.background_image = ''; this.content.hero.imagePreview = ''; },
-
-    // Dynamic List Helpers
-    addHighlight() { this.content.skills.highlights.push({ icon: '', text: '' }) },
-    removeHighlight(i) { this.content.skills.highlights.splice(i, 1) },
-    addSkill() { this.content.skills.skills.push({ name: '', percentage: 50 }) },
-    removeSkill(i) { this.content.skills.skills.splice(i, 1) },
-    addMenuItem() { this.content.navigation.menu_items.push({ name: '', url: '' }) },
-    removeMenuItem(i) { this.content.navigation.menu_items.splice(i, 1) },
-    addQuickLink() { this.content.footer.quick_links.push({ name: '', url: '' }) },
-    removeQuickLink(i) { this.content.footer.quick_links.splice(i, 1) },
-    addServiceLink() { this.content.footer.services_links.push({ name: '', url: '' }) },
-    removeServiceLink(i) { this.content.footer.services_links.splice(i, 1) },
-    addSocialLink() { this.content.footer.social_links.push({ name: '', icon: '', url: '' }) },
-    removeSocialLink(i) { this.content.footer.social_links.splice(i, 1) },
-
-    // Toast Notification
-    showNotification(message, type) {
-      this.toast.message = message;
-      this.toast.type = type;
-      this.toast.show = true;
-      setTimeout(() => { this.toast.show = false }, 3000);
-    }
-  }"
-            x-init="init"
-        >
-            <!-- Loading State -->
-            <div x-show="loading" class="loading-state">
-                <div class="loading-spinner-enhanced">
-                    <div class="spinner"></div>
-                    <p>Loading Contents...</p>
+    <!-- Main Content -->
+    <div x-show="!loading">
+        <!-- Header -->
+        <div class="site-header">
+            <div class="header-content">
+                <div class="header-title">
+                    <h2>Site Content Editor</h2>
+                    <p>Manage all your website content from one place</p>
                 </div>
-            </div>
-
-            <!-- Main Content -->
-            <div x-show="!loading">
-                <!-- Header -->
-                <div class="site-header">
-                    <div class="header-content">
-                        <div class="header-title">
-                            <h2>Site Content Editor</h2>
-                            <p>
-                                Manage all your website content from one place
-                            </p>
-                        </div>
-                        <div class="header-button">
-                            <button
-                                @click="saveContent"
-                                :disabled="saving"
-                                class="btn-secondary"
-                            >
-                                <span
-                                    x-text="saving ? 'Saving...' : 'Save Current Tab'"
-                                ></span>
-                            </button>
-                            <button
-                                @click="saveAllContent"
-                                :disabled="saving"
-                                class="btn-primary"
-                            >
-                                <i x-show="!saving" class="fas fa-save"></i>
-                                <span
-                                    x-text="saving ? 'Saving All...' : 'Save All Content'"
-                                ></span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabs -->
-                <div class="tabs">
-                    <template
-                        x-for="tab in ['hero','about','skills','contact','navigation','footer']"
-                        :key="tab"
-                    >
-                        <button
-                            @click="setActiveTab(tab)"
-                            :class="activeTab === tab ? 'tab active' : 'tab'"
-                        >
-                            <span class="capitalize" x-text="tab"></span>
-                        </button>
-                    </template>
-                </div>
-
-                <!-- Hero Tab -->
-                <div x-show="activeTab === 'hero'" class="card">
-                    <h3>Hero Section</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.hero.text1"
-                        placeholder="Main Headline"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.hero.text2"
-                        placeholder="Sub Headline"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.hero.text3"
-                        placeholder="Tagline"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.hero.text3_highlight"
-                        placeholder="Highlighted Text"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.hero.cta_button"
-                        placeholder="CTA Button"
-                    />
-                    <!-- Background Upload -->
-                    <div style="margin-top: 16px">
-                        <label class="label">Background Image</label>
-                        <div class="upload-box">
-                            <template x-if="!content.hero.imagePreview">
-                                <div>
-                                    <i
-                                        class="fas fa-cloud-upload-alt upload-icon"
-                                    ></i>
-                                    <p class="upload-text">
-                                        Click to upload background image
-                                    </p>
-                                    <input
-                                        type="file"
-                                        @change="handleImageUpload($event)"
-                                        accept="image/*"
-                                        style="display: none"
-                                        id="heroImageUpload"
-                                    />
-                                    <label
-                                        for="heroImageUpload"
-                                        class="btn-primary"
-                                        >Choose File</label
-                                    >
-                                </div>
-                            </template>
-                            <template x-if="content.hero.imagePreview">
-                                <div>
-                                    <img
-                                        :src="content.hero.imagePreview"
-                                        class="upload-preview"
-                                    />
-                                    <button
-                                        type="button"
-                                        @click="removeImage()"
-                                        class="btn-danger small"
-                                    >
-                                        Remove Image
-                                    </button>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- About Tab -->
-                <div x-show="activeTab === 'about'" class="card">
-                    <h3>About Section</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.title"
-                        placeholder="Title"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.subtitle"
-                        placeholder="Subtitle"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.about.main_text"
-                        rows="2"
-                        placeholder="Main Text"
-                    ></textarea>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.typing_text"
-                        placeholder="Typing Animation Text"
-                    />
-                    <h4>Mission</h4>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.mission_title"
-                        placeholder="Mission Title"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.about.mission_text"
-                        rows="3"
-                        placeholder="Mission Text"
-                    ></textarea>
-                    <h4>Vision</h4>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.vision_title"
-                        placeholder="Vision Title"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.about.vision_text"
-                        rows="3"
-                        placeholder="Vision Text"
-                    ></textarea>
-                    <h4>Values</h4>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.values_title"
-                        placeholder="Values Title"
-                    />
-                    <template x-for="(val,i) in content.about.values" :key="i">
-                        <div class="inline-inputs">
-                            <textarea
-                                class="input"
-                                x-model="content.about.values[i]"
-                                rows="2"
-                                placeholder="Value"
-                            ></textarea>
-                            <button
-                                @click="content.about.values.splice(i, 1)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
+                <div class="header-button">
                     <button
-                        @click="content.about.values.push('')"
+                        @click="saveContent"
+                        :disabled="saving"
                         class="btn-secondary"
                     >
-                        Add Value
+                        <span
+                            x-text="saving ? 'Saving...' : 'Save Current Tab'"
+                        ></span>
                     </button>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.about.cta_button"
-                        placeholder="CTA Button"
-                    />
-                </div>
-
-                <!-- Skills Tab -->
-                <div x-show="activeTab === 'skills'" class="card">
-                    <h3>Skills Section</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.skills.title"
-                        placeholder="Title"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.skills.subtitle"
-                        placeholder="Subtitle"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.skills.main_text"
-                        rows="2"
-                        placeholder="Main Text"
-                    ></textarea>
-                    <textarea
-                        class="input"
-                        x-model="content.skills.description"
-                        rows="3"
-                        placeholder="Description"
-                    ></textarea>
-                    <h4>Highlights</h4>
-                    <template
-                        x-for="(hl,i) in content.skills.highlights"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="hl.icon"
-                                placeholder="Icon"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="hl.text"
-                                placeholder="Highlight"
-                            />
-                            <button
-                                @click="removeHighlight(i)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addHighlight" class="btn-secondary">
-                        Add Highlight
-                    </button>
-                    <h4>Skills</h4>
-                    <template x-for="(s,i) in content.skills.skills" :key="i">
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="s.name"
-                                placeholder="Skill"
-                            />
-                            <input
-                                class="input small"
-                                type="number"
-                                x-model="s.percentage"
-                                min="0"
-                                max="100"
-                                placeholder="%"
-                            />
-                            <button @click="removeSkill(i)" class="btn-danger">
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addSkill" class="btn-secondary">
-                        Add Skill
-                    </button>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.skills.cta_button"
-                        placeholder="CTA Button"
-                    />
-                </div>
-
-                <!-- Contact Tab -->
-                <div x-show="activeTab === 'contact'" class="card">
-                    <h3>Contact Section</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.title"
-                        placeholder="Title"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.subtitle"
-                        placeholder="Subtitle"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.contact.main_text"
-                        rows="2"
-                        placeholder="Main Text"
-                    ></textarea>
-                    <textarea
-                        class="input"
-                        x-model="content.contact.description"
-                        rows="2"
-                        placeholder="Description"
-                    ></textarea>
-                    <h4>Contact Info</h4>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.contact_person"
-                        placeholder="Contact Person"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.address"
-                        placeholder="Address"
-                    />
-                    <input
-                        class="input"
-                        type="email"
-                        x-model="content.contact.email"
-                        placeholder="Email"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.whatsapp"
-                        placeholder="WhatsApp"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.business_hours"
-                        placeholder="Business Hours"
-                    />
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.contact.form_title"
-                        placeholder="Form Title"
-                    />
-                    <h4>Services</h4>
-                    <template
-                        x-for="(srv,i) in content.contact.services"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="content.contact.services[i]"
-                                placeholder="Service"
-                            />
-                            <button
-                                @click="content.contact.services.splice(i, 1)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
                     <button
-                        @click="content.contact.services.push('')"
-                        class="btn-secondary"
+                        @click="saveAllContent"
+                        :disabled="saving"
+                        class="btn-primary"
                     >
-                        Add Service
+                        <i x-show="!saving" class="fas fa-save"></i>
+                        <span
+                            x-text="saving ? 'Saving All...' : 'Save All Content'"
+                        ></span>
                     </button>
                 </div>
-
-                <!-- Navigation Tab -->
-                <div x-show="activeTab === 'navigation'" class="card">
-                    <h3>Navigation</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.navigation.logo_text"
-                        placeholder="Logo Text"
-                    />
-                    <h4>Menu Items</h4>
-                    <template
-                        x-for="(item,i) in content.navigation.menu_items"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="item.name"
-                                placeholder="Name"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="item.url"
-                                placeholder="URL"
-                            />
-                            <button
-                                @click="removeMenuItem(i)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addMenuItem" class="btn-secondary">
-                        Add Menu Item
-                    </button>
-                </div>
-
-                <!-- Footer Tab -->
-                <div x-show="activeTab === 'footer'" class="card">
-                    <h3>Footer</h3>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.footer.company_name"
-                        placeholder="Company Name"
-                    />
-                    <textarea
-                        class="input"
-                        x-model="content.footer.tagline"
-                        rows="2"
-                        placeholder="Tagline"
-                    ></textarea>
-                    <h4>Quick Links</h4>
-                    <template
-                        x-for="(q,i) in content.footer.quick_links"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="q.name"
-                                placeholder="Name"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="q.url"
-                                placeholder="URL"
-                            />
-                            <button
-                                @click="removeQuickLink(i)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addQuickLink" class="btn-secondary">
-                        Add Quick Link
-                    </button>
-                    <h4>Services Links</h4>
-                    <template
-                        x-for="(sl,i) in content.footer.services_links"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="sl.name"
-                                placeholder="Name"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="sl.url"
-                                placeholder="URL"
-                            />
-                            <button
-                                @click="removeServiceLink(i)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addServiceLink" class="btn-secondary">
-                        Add Service Link
-                    </button>
-                    <h4>Social Links</h4>
-                    <template
-                        x-for="(soc,i) in content.footer.social_links"
-                        :key="i"
-                    >
-                        <div class="inline-inputs">
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="soc.name"
-                                placeholder="Platform"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="soc.icon"
-                                placeholder="Icon"
-                            />
-                            <input
-                                class="input"
-                                type="text"
-                                x-model="soc.url"
-                                placeholder="URL"
-                            />
-                            <button
-                                @click="removeSocialLink(i)"
-                                class="btn-danger"
-                            >
-                                Remove
-                            </button>
-                        </div>
-                    </template>
-                    <button @click="addSocialLink" class="btn-secondary">
-                        Add Social Link
-                    </button>
-                    <input
-                        class="input"
-                        type="text"
-                        x-model="content.footer.copyright"
-                        placeholder="Copyright"
-                    />
-                </div>
-            </div>
-
-            <!-- Toast -->
-            <div
-                x-show="toast.show"
-                x-transition
-                class="toast"
-                :class="toast.type==='success'?'toast-success':toast.type==='error'?'toast-error':'toast-info'"
-            >
-                <span x-text="toast.message"></span>
-                <button
-                    @click="toast.show=false"
-                    style="
-                        margin-left: 12px;
-                        background: none;
-                        border: none;
-                        color: white;
-                        cursor: pointer;
-                    "
-                >
-                    ×
-                </button>
             </div>
         </div>
 
-        <style>
-            .main-container {
-                max-width: 1400px;
-                margin: 0 auto;
-                padding: 0 16px;
-            }
+        <!-- Tabs -->
+        <div class="tabs">
+            <template
+                x-for="tab in ['hero','about','skills','contact','navigation','footer']"
+                :key="tab"
+            >
+                <button
+                    @click="setActiveTab(tab)"
+                    :class="activeTab === tab ? 'tab active' : 'tab'"
+                >
+                    <span class="capitalize" x-text="tab"></span>
+                </button>
+            </template>
+        </div>
 
-            /* Loading State */
-            .loading-state {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 120px 20px;
-            }
+        <!-- Hero Tab -->
+        <div x-show="activeTab === 'hero'" class="card">
+            <h3>Hero Section</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text1"
+                placeholder="Main Headline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text2"
+                placeholder="Sub Headline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text3"
+                placeholder="Tagline"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.text3_highlight"
+                placeholder="Highlighted Text"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.hero.cta_button"
+                placeholder="CTA Button"
+            />
+            <!-- Background Upload -->
+            <div style="margin-top: 16px">
+                <label class="label">Background Image</label>
+                <div class="upload-box">
+                    <template x-if="!content.hero.imagePreview">
+                        <div>
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <p class="upload-text">
+                                Click to upload background image
+                            </p>
+                            <input
+                                type="file"
+                                @change="handleImageUpload($event)"
+                                accept="image/*"
+                                style="display: none"
+                                id="heroImageUpload"
+                            />
+                            <label for="heroImageUpload" class="btn-primary"
+                                >Choose File</label
+                            >
+                        </div>
+                    </template>
+                    <template x-if="content.hero.imagePreview">
+                        <div>
+                            <img
+                                :src="content.hero.imagePreview"
+                                class="upload-preview"
+                            />
+                            <button
+                                type="button"
+                                @click="removeImage()"
+                                class="btn-danger small"
+                            >
+                                Remove Image
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
 
-            .loading-spinner-enhanced {
-                text-align: center;
-            }
+        <!-- About Tab -->
+        <div x-show="activeTab === 'about'" class="card">
+            <h3>About Section</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.title"
+                placeholder="Title"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.subtitle"
+                placeholder="Subtitle"
+            />
+            <textarea
+                class="input"
+                x-model="content.about.main_text"
+                rows="2"
+                placeholder="Main Text"
+            ></textarea>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.typing_text"
+                placeholder="Typing Animation Text"
+            />
+            <h4>Mission</h4>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.mission_title"
+                placeholder="Mission Title"
+            />
+            <textarea
+                class="input"
+                x-model="content.about.mission_text"
+                rows="3"
+                placeholder="Mission Text"
+            ></textarea>
+            <h4>Vision</h4>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.vision_title"
+                placeholder="Vision Title"
+            />
+            <textarea
+                class="input"
+                x-model="content.about.vision_text"
+                rows="3"
+                placeholder="Vision Text"
+            ></textarea>
+            <h4>Values</h4>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.values_title"
+                placeholder="Values Title"
+            />
+            <template x-for="(val,i) in content.about.values" :key="i">
+                <div class="inline-inputs">
+                    <textarea
+                        class="input"
+                        x-model="content.about.values[i]"
+                        rows="2"
+                        placeholder="Value"
+                    ></textarea>
+                    <button
+                        @click="content.about.values.splice(i, 1)"
+                        class="btn-danger"
+                    >
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button
+                @click="content.about.values.push('')"
+                class="btn-secondary"
+            >
+                Add Value
+            </button>
+            <input
+                class="input"
+                type="text"
+                x-model="content.about.cta_button"
+                placeholder="CTA Button"
+            />
+        </div>
 
-            .spinner {
-                width: 48px;
-                height: 48px;
-                border: 4px solid #f3f4f6;
-                border-top: 4px solid #8b4a87;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-                margin: 0 auto 16px;
-            }
+        <!-- Skills Tab -->
+        <div x-show="activeTab === 'skills'" class="card">
+            <h3>Skills Section</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.skills.title"
+                placeholder="Title"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.skills.subtitle"
+                placeholder="Subtitle"
+            />
+            <textarea
+                class="input"
+                x-model="content.skills.main_text"
+                rows="2"
+                placeholder="Main Text"
+            ></textarea>
+            <textarea
+                class="input"
+                x-model="content.skills.description"
+                rows="3"
+                placeholder="Description"
+            ></textarea>
+            <h4>Highlights</h4>
+            <template x-for="(hl,i) in content.skills.highlights" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="hl.icon"
+                        placeholder="Icon"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="hl.text"
+                        placeholder="Highlight"
+                    />
+                    <button @click="removeHighlight(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addHighlight" class="btn-secondary">
+                Add Highlight
+            </button>
+            <h4>Skills</h4>
+            <template x-for="(s,i) in content.skills.skills" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="s.name"
+                        placeholder="Skill"
+                    />
+                    <input
+                        class="input small"
+                        type="number"
+                        x-model="s.percentage"
+                        min="0"
+                        max="100"
+                        placeholder="%"
+                    />
+                    <button @click="removeSkill(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addSkill" class="btn-secondary">Add Skill</button>
+            <input
+                class="input"
+                type="text"
+                x-model="content.skills.cta_button"
+                placeholder="CTA Button"
+            />
+        </div>
 
-            .loading-spinner-enhanced p {
-                color: #6b7280;
-                font-size: 16px;
-                margin: 0;
-            }
+        <!-- Contact Tab -->
+        <div x-show="activeTab === 'contact'" class="card">
+            <h3>Contact Section</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.title"
+                placeholder="Title"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.subtitle"
+                placeholder="Subtitle"
+            />
+            <textarea
+                class="input"
+                x-model="content.contact.main_text"
+                rows="2"
+                placeholder="Main Text"
+            ></textarea>
+            <textarea
+                class="input"
+                x-model="content.contact.description"
+                rows="2"
+                placeholder="Description"
+            ></textarea>
+            <h4>Contact Info</h4>
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.contact_person"
+                placeholder="Contact Person"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.address"
+                placeholder="Address"
+            />
+            <input
+                class="input"
+                type="email"
+                x-model="content.contact.email"
+                placeholder="Email"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.whatsapp"
+                placeholder="WhatsApp"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.business_hours"
+                placeholder="Business Hours"
+            />
+            <input
+                class="input"
+                type="text"
+                x-model="content.contact.form_title"
+                placeholder="Form Title"
+            />
+            <h4>Services</h4>
+            <template x-for="(srv,i) in content.contact.services" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="content.contact.services[i]"
+                        placeholder="Service"
+                    />
+                    <button
+                        @click="content.contact.services.splice(i, 1)"
+                        class="btn-danger"
+                    >
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button
+                @click="content.contact.services.push('')"
+                class="btn-secondary"
+            >
+                Add Service
+            </button>
+        </div>
 
-            /* Header */
-            .site-header {
-                background: linear-gradient(135deg, #8b4a87, #d4a574);
-                border-radius: 16px;
-                padding: 32px;
-                margin-bottom: 32px;
-                color: white;
-            }
+        <!-- Navigation Tab -->
+        <div x-show="activeTab === 'navigation'" class="card">
+            <h3>Navigation</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.navigation.logo_text"
+                placeholder="Logo Text"
+            />
+            <h4>Menu Items</h4>
+            <template
+                x-for="(item,i) in content.navigation.menu_items"
+                :key="i"
+            >
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="item.name"
+                        placeholder="Name"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="item.url"
+                        placeholder="URL"
+                    />
+                    <button @click="removeMenuItem(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addMenuItem" class="btn-secondary">
+                Add Menu Item
+            </button>
+        </div>
 
-            .header-content {
-                display: flex;
-                justify-content: space-between;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 24px;
-            }
+        <!-- Footer Tab -->
+        <div x-show="activeTab === 'footer'" class="card">
+            <h3>Footer</h3>
+            <input
+                class="input"
+                type="text"
+                x-model="content.footer.company_name"
+                placeholder="Company Name"
+            />
+            <textarea
+                class="input"
+                x-model="content.footer.tagline"
+                rows="2"
+                placeholder="Tagline"
+            ></textarea>
+            <h4>Quick Links</h4>
+            <template x-for="(q,i) in content.footer.quick_links" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="q.name"
+                        placeholder="Name"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="q.url"
+                        placeholder="URL"
+                    />
+                    <button @click="removeQuickLink(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addQuickLink" class="btn-secondary">
+                Add Quick Link
+            </button>
+            <h4>Services Links</h4>
+            <template x-for="(sl,i) in content.footer.services_links" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="sl.name"
+                        placeholder="Name"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="sl.url"
+                        placeholder="URL"
+                    />
+                    <button @click="removeServiceLink(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addServiceLink" class="btn-secondary">
+                Add Service Link
+            </button>
+            <h4>Social Links</h4>
+            <template x-for="(soc,i) in content.footer.social_links" :key="i">
+                <div class="inline-inputs">
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="soc.name"
+                        placeholder="Platform"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="soc.icon"
+                        placeholder="Icon"
+                    />
+                    <input
+                        class="input"
+                        type="text"
+                        x-model="soc.url"
+                        placeholder="URL"
+                    />
+                    <button @click="removeSocialLink(i)" class="btn-danger">
+                        Remove
+                    </button>
+                </div>
+            </template>
+            <button @click="addSocialLink" class="btn-secondary">
+                Add Social Link
+            </button>
+            <input
+                class="input"
+                type="text"
+                x-model="content.footer.copyright"
+                placeholder="Copyright"
+            />
+        </div>
+    </div>
 
-            .header-title h2 {
-                font-size: 32px;
-                font-weight: 700;
-                margin: 0 0 8px 0;
-                font-family: "Playfair Display", serif;
-            }
-
-            .header-title p {
-                font-size: 16px;
-                opacity: 0.9;
-                margin: 0;
-            }
-
-            .header-button {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
-            .tabs {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-                margin-bottom: 24px;
-                background: white;
-                padding: 16px;
-                border-radius: 12px;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            }
-            .tab {
-                flex: 1 1 auto;
-                text-align: center;
-                padding: 10px 16px;
-                border-radius: 8px;
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: 500;
-                transition: all 0.3s ease;
-                text-transform: capitalize;
-            }
-            .tab:hover {
-                background: #f1f5f9;
-                border-color: #8b4a87;
-            }
-            .tab.active {
-                background: linear-gradient(135deg, #8b4a87, #d4a574);
-                color: white;
-                border-color: transparent;
-            }
-
-            .card {
-                background: white;
-                padding: 24px;
-                border-radius: 12px;
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                margin-bottom: 24px;
-            }
-            @media (max-width: 640px) {
-                .card {
-                    padding: 16px;
-                }
-            }
-
-            .card h3 {
-                font-size: 20px;
-                margin-bottom: 20px;
-                font-weight: 600;
-                color: #1e293b;
-            }
-            .card h4 {
-                font-size: 16px;
-                margin: 20px 0 12px 0;
-                font-weight: 600;
-                color: #374151;
-                border-bottom: 1px solid #e2e8f0;
-                padding-bottom: 8px;
-            }
-
-            .input {
-                width: 100%;
-                padding: 12px 16px;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-bottom: 16px;
-                font-size: 14px;
-                transition: all 0.3s ease;
-            }
-            .input:focus {
-                outline: none;
-                border-color: #8b4a87;
-                box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
-            }
-            .input.small {
-                width: 80px;
-            }
-
-            .inline-inputs {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 12px;
-                align-items: flex-start;
-                margin-bottom: 12px;
-            }
-            .inline-inputs .input {
-                margin-bottom: 0;
-                flex: 1 1 100%;
-            }
-            @media (min-width: 768px) {
-                .inline-inputs .input {
-                    flex: 1;
-                }
-                .site-header {
-                    padding: 24px;
-                    margin-bottom: 24px;
-                }
-
-                .header-title h2 {
-                    font-size: 24px;
-                }
-            }
-            @media (max-width: 480px) {
-                .site-header {
-                    padding: 20px;
-                }
-
-                .header-title h2 {
-                    font-size: 20px;
-                }
-            }
-            /* Buttons */
-            .btn-primary,
-            .btn-secondary,
-            .btn-danger,
-            .btn-danger.small {
-                padding: 12px 20px;
-                border-radius: 8px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.3s ease;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-            }
-            .btn-primary {
-                background: linear-gradient(135deg, #8b4a87, #d4a574);
-                color: white;
+    <!-- Toast -->
+    <div
+        x-show="toast.show"
+        x-transition
+        class="toast"
+        :class="toast.type==='success'?'toast-success':toast.type==='error'?'toast-error':'toast-info'"
+    >
+        <span x-text="toast.message"></span>
+        <button
+            @click="toast.show=false"
+            style="
+                margin-left: 12px;
+                background: none;
                 border: none;
-            }
-            .btn-primary:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            }
-            .btn-secondary {
-                background: #f3f4f6;
-                border: 1px solid #e5e7eb;
-                color: #374151;
-            }
-            .btn-secondary:hover {
-                background: #e5e7eb;
-                color: #1f2937;
-            }
-            .btn-danger {
-                background: #ef4444;
-                border: 1px solid #dc2626;
                 color: white;
-            }
-            .btn-danger:hover {
-                background: #dc2626;
-            }
-            .btn-danger.small {
-                font-size: 12px;
-                padding: 6px 12px;
-            }
+                cursor: pointer;
+            "
+        >
+            ×
+        </button>
+    </div>
+</div>
 
-            /* Toast */
-            .toast {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                padding: 16px 20px;
-                border-radius: 12px;
-                color: white;
-                font-weight: 500;
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 12px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                backdrop-filter: blur(8px);
-                min-width: 280px;
-            }
-            .toast-success {
-                background: linear-gradient(135deg, #10b981, #059669);
-            }
-            .toast-error {
-                background: linear-gradient(135deg, #ef4444, #dc2626);
-            }
-            .toast-info {
-                background: linear-gradient(135deg, #3b82f6, #2563eb);
-            }
+<style>
+    .main-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 16px;
+    }
 
-            @keyframes spin {
-                from {
-                    transform: rotate(0deg);
-                }
-                to {
-                    transform: rotate(360deg);
-                }
-            }
-        </style>
-    </body>
-</html>
+    /* Loading State */
+    .loading-state {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 120px 20px;
+    }
+
+    .loading-spinner-enhanced {
+        text-align: center;
+    }
+
+    .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #8b4a87;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    .loading-spinner-enhanced p {
+        color: #6b7280;
+        font-size: 16px;
+        margin: 0;
+    }
+
+    /* Header */
+    .site-header {
+        background: linear-gradient(135deg, #8b4a87, #d4a574);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 32px;
+        color: white;
+    }
+
+    .header-content {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 24px;
+    }
+
+    .header-title h2 {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0 0 8px 0;
+        font-family: "Playfair Display", serif;
+    }
+
+    .header-title p {
+        font-size: 16px;
+        opacity: 0.9;
+        margin: 0;
+    }
+
+    .header-button {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .tabs {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+        background: white;
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .tab {
+        flex: 1 1 auto;
+        text-align: center;
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        text-transform: capitalize;
+    }
+    .tab:hover {
+        background: #f1f5f9;
+        border-color: #8b4a87;
+    }
+    .tab.active {
+        background: linear-gradient(135deg, #8b4a87, #d4a574);
+        color: white;
+        border-color: transparent;
+    }
+
+    .card {
+        background: white;
+        padding: 24px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 24px;
+    }
+    @media (max-width: 640px) {
+        .card {
+            padding: 16px;
+        }
+    }
+
+    .card h3 {
+        font-size: 20px;
+        margin-bottom: 20px;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .card h4 {
+        font-size: 16px;
+        margin: 20px 0 12px 0;
+        font-weight: 600;
+        color: #374151;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 8px;
+    }
+
+    .input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        transition: all 0.3s ease;
+    }
+    .input:focus {
+        outline: none;
+        border-color: #8b4a87;
+        box-shadow: 0 0 0 3px rgba(139, 74, 135, 0.1);
+    }
+    .input.small {
+        width: 80px;
+    }
+
+    .inline-inputs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+    .inline-inputs .input {
+        margin-bottom: 0;
+        flex: 1 1 100%;
+    }
+    @media (min-width: 768px) {
+        .inline-inputs .input {
+            flex: 1;
+        }
+        .site-header {
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .header-title h2 {
+            font-size: 24px;
+        }
+    }
+    @media (max-width: 480px) {
+        .site-header {
+            padding: 20px;
+        }
+
+        .header-title h2 {
+            font-size: 20px;
+        }
+    }
+    /* Buttons */
+    .btn-primary,
+    .btn-secondary,
+    .btn-danger,
+    .btn-danger.small {
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #8b4a87, #d4a574);
+        color: white;
+        border: none;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    }
+    .btn-secondary {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        color: #374151;
+    }
+    .btn-secondary:hover {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+    .btn-danger {
+        background: #ef4444;
+        border: 1px solid #dc2626;
+        color: white;
+    }
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+    .btn-danger.small {
+        font-size: 12px;
+        padding: 6px 12px;
+    }
+
+    /* Toast */
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(8px);
+        min-width: 280px;
+    }
+    .toast-success {
+        background: linear-gradient(135deg, #10b981, #059669);
+    }
+    .toast-error {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    .toast-info {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+</style>

@@ -19,6 +19,9 @@ function ordersComponent() {
         showDeleteConfirm: false,
         deletingOrder: null,
         deleting: false,
+        // View modal
+        showViewModal: false,
+        viewingOrder: null,
 
         // Lifecycle: init
         async init() {
@@ -155,6 +158,16 @@ function ordersComponent() {
         closeEdit() {
             this.editingOrder = null;
             this.showEditModal = false;
+        },
+
+        openView(order) {
+            this.viewingOrder = order;
+            this.showViewModal = true;
+        },
+
+        closeView() {
+            this.viewingOrder = null;
+            this.showViewModal = false;
         },
 
         async saveEdit() {
