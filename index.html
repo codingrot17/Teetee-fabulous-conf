@@ -3,7 +3,6 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
         <!-- Primary Meta Tags -->
         <title>
             TEETEE FABULOUS CONFECTIONARY INT'L | Premium Cakes & Confectionery
@@ -70,24 +69,218 @@
                 "priceRange": "₦₦"
             }
         </script>
-
         <!-- Favicon -->
         <link rel="icon" href="asset/images/brand.png" type="image/png" />
 
-        <!-- Fonts and Icons -->
+        <!-- Font Awesome -->
         <link
             rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
         />
+
+        <!-- Google Fonts -->
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:wght@500;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap"
             rel="stylesheet"
         />
 
-        <!-- Styles -->
+        <!-- Stylesheets -->
         <link rel="stylesheet" href="css/styles.css" />
-    </head>
+        <style>
+            /* CART ICON FIX - Add this to your styles.css or in a <style> tag */
 
+            /* Ensure cart links are clickable and above other elements */
+            .cart-link,
+            #cartLink,
+            #mobileCartLink {
+                position: relative;
+                z-index: 100 !important;
+                pointer-events: all !important;
+                cursor: pointer !important;
+            }
+
+            /* Ensure cart icons receive clicks */
+            .cart-link i,
+            #cartLink i,
+            #mobileCartLink i {
+                pointer-events: none; /* Let clicks pass through to parent */
+            }
+
+            /* Cart counter should not block clicks */
+            .cart-counter {
+                pointer-events: none;
+            }
+
+            /* Mobile actions should not block cart icon */
+            .mobile-actions {
+                z-index: 100;
+                pointer-events: all;
+            }
+
+            /* Menu button should not overlap cart */
+            .menu-btn {
+                z-index: 99;
+            }
+
+            /* Ensure navbar has correct stacking */
+            .navbar {
+                z-index: 1000;
+            }
+
+            .navbar .max-width {
+                position: relative;
+                z-index: 1001;
+            }
+
+            /* Desktop cart visibility */
+            .desktop-cart {
+                display: list-item !important;
+            }
+
+            @media (max-width: 768px) {
+                .desktop-cart {
+                    display: none !important;
+                }
+
+                .mobile-cart {
+                    display: flex !important;
+                }
+            }
+
+            /* Debug styles - remove after testing */
+            .cart-link:hover,
+            #cartLink:hover,
+            #mobileCartLink:hover {
+                background: rgba(
+                    212,
+                    165,
+                    116,
+                    0.9
+                ) !important; /* Visual feedback on hover */
+            }
+
+            /* Ensure cart items in menu are clickable */
+            .cart-item {
+                z-index: 100;
+                pointer-events: all;
+            }
+
+            .cart-item a {
+                pointer-events: all;
+                cursor: pointer;
+            }
+        </style>
+
+        <!-- jQuery -->
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+        <!-- Typed.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.16/typed.umd.js"></script>
+
+        <!-- Appwrite SDK -->
+        <script type="module">
+            import {
+                Client,
+                Databases,
+                Query
+            } from "https://cdn.skypack.dev/appwrite@13.0.0";
+
+            const APPWRITE_CONFIG = {
+                endpoint: "https://cloud.appwrite.io/v1",
+                projectId: "68ca0f1c00035ab92fa8",
+                databaseId: "68cdb1dc00266358cd6b",
+                collections: {
+                    products: "products",
+                    categories: "categories"
+                },
+                bucketId: "68cdb9ef003cf2887d53"
+            };
+
+            const client = new Client()
+                .setEndpoint(APPWRITE_CONFIG.endpoint)
+                .setProject(APPWRITE_CONFIG.projectId);
+
+            const databases = new Databases(client);
+
+            class ProductService {
+                async getProducts(filters = {}) {
+                    try {
+                        const queries = [
+                            Query.equal("status", "active"),
+                            Query.orderDesc("$createdAt")
+                        ];
+
+                        if (filters.category) {
+                            queries.push(
+                                Query.equal("category", filters.category)
+                            );
+                        }
+                        if (filters.limit) {
+                            queries.push(Query.limit(filters.limit));
+                        }
+
+                        const products = await databases.listDocuments(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.products,
+                            queries
+                        );
+
+                        products.documents = products.documents.map(
+                            product => ({
+                                ...product,
+                                imageUrls:
+                                    product.images?.map(imageId =>
+                                        this.getImageUrl(imageId)
+                                    ) || []
+                            })
+                        );
+
+                        return products;
+                    } catch (error) {
+                        console.error("Error fetching products:", error);
+                        return { documents: [], total: 0 };
+                    }
+                }
+
+                async getCategories() {
+                    try {
+                        return await databases.listDocuments(
+                            APPWRITE_CONFIG.databaseId,
+                            APPWRITE_CONFIG.collections.categories,
+                            [
+                                Query.equal("status", "active"),
+                                Query.orderAsc("display_order")
+                            ]
+                        );
+                    } catch (error) {
+                        console.error("Error fetching categories:", error);
+                        return { documents: [], total: 0 };
+                    }
+                }
+
+                getImageUrl(fileId) {
+                    if (!fileId)
+                        return "https://via.placeholder.com/400x300/f3f4f6/9ca3af?text=No+Image";
+                    return `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${fileId}/view?project=${APPWRITE_CONFIG.projectId}`;
+                }
+
+                formatPrice(price) {
+                    return new Intl.NumberFormat("en-NG", {
+                        style: "currency",
+                        currency: "NGN",
+                        minimumFractionDigits: 0
+                    }).format(price);
+                }
+            }
+
+            window.productService = new ProductService();
+            window.APPWRITE_CONFIG = APPWRITE_CONFIG;
+
+            document.addEventListener("DOMContentLoaded", async () => {
+                await window.loadDynamicProducts();
+            });
+        </script>
+    </head>
     <body>
         <!-- Preloader -->
         <div id="preloader">
@@ -456,10 +649,8 @@
                                 <div class="info-details">
                                     <div class="info-head">Address</div>
                                     <div class="info-sub">
-                                        2, Adeola Adewale Street, Off Alhaji
-                                        yekini olanrewaju street akesan junction
-                                        along lasu igando road, behind Tipper
-                                        Garage.
+                                        68, Ebute Kekere Street, Off Afolabi
+                                        Bus-Stop
                                     </div>
                                 </div>
                             </div>
@@ -477,7 +668,7 @@
                                 <div class="info-details">
                                     <div class="info-head">WhatsApp</div>
                                     <div class="info-sub">
-                                        +234 903 141 6560
+                                        +234 XXX XXX XXXX
                                     </div>
                                 </div>
                             </div>
@@ -653,10 +844,8 @@
                     <div class="footer-section">
                         <h3>Contact Info</h3>
                         <p>
-                            <i class="fas fa-map-marker-alt"></i> No 2, Adeola
-                            Adewale street, off Alhaji yekini olanrewaju street
-                            akesan junction along lasu igando road, behind
-                            Tipper Garage.
+                            <i class="fas fa-map-marker-alt"></i> 68, Ebute
+                            Kekere Street
                         </p>
                         <p>
                             <i class="fas fa-envelope"></i>
